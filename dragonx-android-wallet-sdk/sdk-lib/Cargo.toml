@@ -16,6 +16,8 @@ hex = "0.4"
 jni = { version = "0.17", default-features = false }
 # jni-sys 0.3.1（2024 重新发布）要求 rustc>=1.77，会让 1.65 编不过；锁死回 0.3.0（满足 jni 0.17 的 ^0.3）
 jni-sys = "=0.3.0"
+# unicode-ident 1.0.24+（2024）要求 rustc>=1.71；换 librustzcash 后被 cargo 升级，锁回 2022 的 1.0.5（纯数据叶子库，无 feature，安全）
+unicode-ident = "=1.0.5"
 log = "0.4"
 log-panics = "2.0.0"
 zcash_client_backend = "0.5"
