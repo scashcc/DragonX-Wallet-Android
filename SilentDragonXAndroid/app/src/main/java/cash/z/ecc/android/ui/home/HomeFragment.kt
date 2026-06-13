@@ -424,6 +424,12 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
 
     private fun onSyncing(uiModel: HomeViewModel.UiModel) {
         setAvailable(null, null, null)
+        // DragonX: remind the user to keep the app foregrounded while syncing. Backgrounding or
+        // locking the screen can pause the scan, and a long stall on one block range looks like a
+        // freeze. This banner is cleared automatically once the wallet reaches SYNCED.
+        if (!uiModel.isDisconnected) {
+            setBanner(getString(R.string.home_sync_dont_background))
+        }
     }
 
     private fun onSynced(uiModel: HomeViewModel.UiModel) {

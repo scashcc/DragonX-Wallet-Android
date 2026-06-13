@@ -79,10 +79,12 @@ class MagicSnakeLoader(
             return
         }
 
-        // if we are scanning, then set the animation progress, based on the scan progress
-        // if we're not scanning, then we're looping
+        // DragonX: while scanning, keep looping (like downloading) instead of pinning the loader to
+        // the exact scan %. A heavy block range can take minutes with no % change, and a pinned
+        // loader looks frozen ("圈圈不动了"). The % is shown in the status text; the spinner only
+        // needs to show the wallet is alive and working.
         animation.currentFrame().let { frame ->
-            if (isDownloading) allowLoop(frame) else applyScanProgress(frame)
+            if (isDownloading || isScanning) allowLoop(frame) else applyScanProgress(frame)
         }
     }
 
@@ -105,12 +107,10 @@ class MagicSnakeLoader(
             return
         }
 
-        if (isPaused && isStarted) {
-            // move forward within the scan range, proportionate to how much scanning is complete
-            val scanRange = scanningEndFrame - scanningStartFrame
-            val scanRangeProgress = scanProgress.toFloat() / 100.0f * scanRange.toFloat()
-            lottie.progress = (scanningStartFrame.toFloat() + scanRangeProgress) / totalFrames
-        }
+        // DragonX: don't pin the loader to the scan % (which freezes it between updates, and for
+        // minutes at a time on a heavy block range). Keep it animating so the user can see the
+        // wallet is still working during long scan stalls. The actual % is shown in the status text.
+        if (isStarted) unpause()
     }
 
     private fun playToCompletion() {
