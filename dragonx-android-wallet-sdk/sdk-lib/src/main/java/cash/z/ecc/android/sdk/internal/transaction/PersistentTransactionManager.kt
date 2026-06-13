@@ -188,6 +188,13 @@ class PersistentTransactionManager(
         val encodedTx = try {
             twig("beginning to encode consolidation transaction with : $encoder")
             encoder.createConsolidationTransaction(spendingKey, maxInputs, fromAccountIndex)
+        } catch (t: cash.z.ecc.android.sdk.exception.TransactionEncoderException.ConsolidationNeedsRescanException) {
+            // Don't swallow this one as a generic encode failure: it means the wallet needs a full
+            // rescan to rebuild witnesses. Drop the empty placeholder and propagate so the UI can
+            // offer the rescan.
+            twig("[consolidation] needs rescan; removing placeholder ${tx.id} and propagating")
+            safeUpdate("removing consolidation placeholder before rescan") { delete(tx) }
+            throw t
         } catch (t: Throwable) {
             var message = "failed to encode consolidation transaction due to : ${t.message}"
             t.cause?.let { message += " caused by: $it" }

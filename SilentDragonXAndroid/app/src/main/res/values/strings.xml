@@ -26,6 +26,10 @@
     <string name="consolidate_none">✅ 你的零钱已经很整齐，无需合并。</string>
     <string name="consolidate_error">合并未完成：%1$s</string>
     <string name="consolidate_need_sync">请先等待钱包同步完成（进度条满）再合并零钱。Please wait until the wallet is fully synced.</string>
+    <string name="consolidate_needs_rescan">⚠️ 检测到零钱「见证」未同步：链上有余额，但暂时无法动用（见证断档）。需要完整重扫重建后才能合并或转出。</string>
+    <string name="consolidate_rescan_title">需要完整重扫修复零钱</string>
+    <string name="consolidate_rescan_message">你的余额在链上，但本地「见证」没同步好，导致零钱既合并不了、也转不出（就是你遇到的「合并说很整齐、转账说去合并」的死循环）。\n\n解决办法：清除本地区块数据并从头完整重扫，重建连续见证。助记词和地址不受影响，无需重装。\n\n⚠️ 重扫期间请保持应用在前台、屏幕常亮、别切后台。完成后等几分钟让交易确认，再合并或转账即可。\n\n现在就重扫吗？</string>
+    <string name="consolidate_rescan_confirm">清除并完整重扫</string>
     <string name="consolidate_confirm_title">开始合并零钱？</string>
     <string name="consolidate_confirm_message">钱包将自动把零钱碎片合并成几个大额，全程自动进行，可能持续几分钟。期间请保持应用打开、屏幕常亮。是否开始？</string>
     <string name="send_final_error_fragmented">余额充足，但你的“零钱”过于分散，一次转不出这么多。请先到「我的 → 合并零钱」自动合并，再来转账。\nYour balance is enough, but it is split into too many small notes. Use “合并零钱 / Consolidate” in the Profile tab first, then send.</string>

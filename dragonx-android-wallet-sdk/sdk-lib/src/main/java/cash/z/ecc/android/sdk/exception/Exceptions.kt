@@ -250,4 +250,9 @@ sealed class TransactionEncoderException(message: String, cause: Throwable? = nu
             " latest height to know which consensus rules to apply. However, the last scanned" +
             " height was $lastScannedHeight."
     )
+    object ConsolidationNeedsRescanException : TransactionEncoderException(
+        "DRAGONX_NEEDS_RESCAN: funds exist but their sapling witnesses are missing at the anchor" +
+            " height, so they cannot be spent or consolidated yet. A full rescan is required to" +
+            " rebuild continuous witnesses."
+    )
 }

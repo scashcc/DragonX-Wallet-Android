@@ -11,6 +11,7 @@ import cash.z.ecc.android.ext.showConfirmation
 import cash.z.ecc.android.sdk.Synchronizer.Status.SYNCED
 import cash.z.ecc.android.sdk.db.entity.isFailedEncoding
 import cash.z.ecc.android.sdk.db.entity.isFailedSubmit
+import cash.z.ecc.android.sdk.exception.TransactionEncoderException
 import cash.z.ecc.android.ui.base.BaseFragment
 import cash.z.ecc.android.util.twig
 import kotlinx.coroutines.flow.first
@@ -85,13 +86,49 @@ class ConsolidateFragment : BaseFragment<FragmentConsolidateBinding>() {
                 getString(R.string.consolidate_done, rounds)
             }
         } catch (t: Throwable) {
-            twig("consolidation failed: $t")
-            binding.textStatus.text =
-                getString(R.string.consolidate_error, t.message ?: t.toString())
+            if (isNeedsRescan(t)) {
+                twig("consolidation needs a full rescan: $t")
+                binding.textStatus.text = getString(R.string.consolidate_needs_rescan)
+                promptRescan()
+            } else {
+                twig("consolidation failed: $t")
+                binding.textStatus.text =
+                    getString(R.string.consolidate_error, t.message ?: t.toString())
+            }
         } finally {
             running = false
             binding.buttonStart.isEnabled = true
             binding.progressConsolidate.visibility = View.GONE
+        }
+    }
+
+    /**
+     * Detects the SDK's "funds exist but witnesses are missing -> needs a full rescan" signal.
+     * Checks both the exception type and a stable message marker, since coroutine flows may wrap
+     * the original exception.
+     */
+    private fun isNeedsRescan(t: Throwable): Boolean {
+        var cause: Throwable? = t
+        while (cause != null) {
+            if (cause is TransactionEncoderException.ConsolidationNeedsRescanException) return true
+            if (cause.message?.contains("DRAGONX_NEEDS_RESCAN") == true) return true
+            cause = cause.cause
+        }
+        return false
+    }
+
+    /**
+     * Offers a one-tap full rescan. A rescan rebuilds continuous witnesses from the wallet's
+     * birthday, which is the only real cure for the dust deadlock. Mnemonic/address are untouched.
+     */
+    private fun promptRescan() {
+        mainActivity?.showConfirmation(
+            getString(R.string.consolidate_rescan_title),
+            getString(R.string.consolidate_rescan_message),
+            getString(R.string.consolidate_rescan_confirm)
+        ) {
+            viewModel.wipe()
+            mainActivity?.restartApp()
         }
     }
 }

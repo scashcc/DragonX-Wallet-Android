@@ -20,6 +20,15 @@ internal interface RustBackendWelding {
     companion object {
         /** Sentinel returned by [consolidateToAddress] when there is nothing left to consolidate. */
         const val NOTHING_TO_CONSOLIDATE = -2L
+
+        /**
+         * Sentinel returned by [consolidateToAddress] when funds exist but are NOT spendable at the
+         * anchor height because their witnesses are missing / not yet rebuilt (the dust deadlock:
+         * "balance shows money, but transfer says go-consolidate while consolidate says
+         * already-tidy"). The wallet must run a full rescan to rebuild continuous witnesses before
+         * consolidation or a large send can succeed.
+         */
+        const val NEEDS_RESCAN = -3L
     }
 
     suspend fun createToAddress(

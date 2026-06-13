@@ -68,6 +68,12 @@ internal class WalletTransactionEncoder(
         if (transactionId == RustBackendWelding.NOTHING_TO_CONSOLIDATE) {
             return null
         }
+        if (transactionId == RustBackendWelding.NEEDS_RESCAN) {
+            // Funds exist but their witnesses are missing at the anchor; consolidation can't help
+            // until a full rescan rebuilds them. Surface this distinctly so the UI offers a rescan
+            // instead of falsely reporting "nothing to consolidate".
+            throw TransactionEncoderException.ConsolidationNeedsRescanException
+        }
         return repository.findEncodedTransactionById(transactionId)
             ?: throw TransactionEncoderException.TransactionNotFoundException(transactionId)
     }

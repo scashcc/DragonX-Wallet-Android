@@ -601,9 +601,18 @@ pub unsafe extern "C" fn Java_cash_z_ecc_android_sdk_jni_RustBackend_getVerified
                     .ok_or(format_err!("Anchor height not available; scan required."))
             })
             .and_then(|anchor| {
+                // DragonX: report the *spendable* balance — sum only notes that actually have a
+                // witness at the anchor (i.e. can be used as inputs in a spend right now).
+                // Previously this used get_balance_at, which counts every unspent note even when
+                // its witness is missing, so the Send screen advertised money the wallet could
+                // not move (the "balance shows X, but transfer says go-consolidate, and
+                // consolidate says already-tidy" contradiction). Summing the truly-spendable
+                // notes keeps the displayed balance honest and consistent with what a spend or a
+                // consolidation can actually pick up.
                 (&db_data)
-                    .get_balance_at(account, anchor)
+                    .get_unspent_sapling_notes(account, anchor)
                     .map_err(|e| format_err!("Error while fetching verified balance: {}", e))
+                    .map(|notes| notes.iter().map(|n| n.note_value).sum::<Amount>())
             })
             .map(|amount| amount.into())
     });
@@ -1149,8 +1158,36 @@ pub unsafe extern "C" fn Java_cash_z_ecc_android_sdk_jni_RustBackend_consolidate
         .map_err(|e| format_err!("Error while consolidating notes: {}", e))?
         {
             Some(tx_ref) => Ok(tx_ref),
-            // Nothing left worth consolidating; signal the Kotlin loop to stop.
-            None => Ok(-2i64),
+            None => {
+                // DragonX: consolidate found fewer than 2 spendable notes. Distinguish two very
+                // different situations, so the UI never tells the user "already tidy" while the
+                // Send screen tells them "go consolidate":
+                //   * funds are genuinely already tidy (<= 1 note total)        -> -2
+                //   * funds exist but are NOT spendable at the anchor because their witnesses are
+                //     missing / not yet rebuilt (the dust-deadlock)             -> -3
+                // On -3 the Kotlin layer offers a full rescan, which rebuilds continuous
+                // witnesses and is the only real cure for the deadlock.
+                let (target, anchor) = db_data
+                    .get_target_and_anchor_heights()
+                    .map_err(|e| format_err!("Error fetching anchor height: {}", e))?
+                    .ok_or_else(|| format_err!("Height not available; scan required."))?;
+                let total = db_data
+                    .get_balance_at(AccountId(account), target)
+                    .map_err(|e| format_err!("Error fetching total balance: {}", e))?;
+                let spendable: Amount = db_data
+                    .get_unspent_sapling_notes(AccountId(account), anchor)
+                    .map_err(|e| format_err!("Error fetching spendable notes: {}", e))?
+                    .iter()
+                    .map(|n| n.note_value)
+                    .sum();
+                if total > spendable {
+                    // Some money is stuck behind missing witnesses -> ask the app to rescan.
+                    Ok(-3i64)
+                } else {
+                    // Everything we hold is already spendable and tidy.
+                    Ok(-2i64)
+                }
+            }
         }
     });
     unwrap_exc_or(&env, res, -1)
