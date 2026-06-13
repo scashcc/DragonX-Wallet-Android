@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.lifecycleScope
 import cash.z.ecc.android.R
 import cash.z.ecc.android.databinding.FragmentSendFinalBinding
 import cash.z.ecc.android.ext.WalletZecFormmatter
@@ -18,13 +19,19 @@ import cash.z.ecc.android.sdk.ext.toAbbreviatedAddress
 import cash.z.ecc.android.sdk.model.Zatoshi
 import cash.z.ecc.android.ui.base.BaseFragment
 import cash.z.ecc.android.util.twig
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 
 class SendFinalFragment : BaseFragment<FragmentSendFinalBinding>() {
     override val screen = Report.Screen.SEND_FINAL
 
     private val sendViewModel: SendViewModel by activityViewModels()
+
+    // Set true once the send reaches a terminal state (success/failure/cancelled), so the
+    // timeout safety net knows whether it still needs to surface a failure.
+    private var reachedTerminal = false
 
     override fun inflate(inflater: LayoutInflater): FragmentSendFinalBinding =
         FragmentSendFinalBinding.inflate(inflater)
@@ -41,6 +48,18 @@ class SendFinalFragment : BaseFragment<FragmentSendFinalBinding>() {
         binding.textConfirmation.text =
             "${getString(R.string.send_final_sending)} ${WalletZecFormmatter.toZecStringFull(sendViewModel.zatoshiAmount)} ${getString(R.string.symbol)}\n${getString(R.string.send_final_to)}\n${sendViewModel.toAddress.toAbbreviatedAddress()}"
         mainActivity?.preventBackPress(this)
+
+        // Safety net: a shielded send should resolve (success or failure) well within this window.
+        // If the pending-tx flow never reaches a terminal state — e.g. the node rejects the tx for a
+        // bad anchor but the rejection isn't surfaced — don't trap the user on an endless spinner.
+        reachedTerminal = false
+        viewLifecycleOwner.lifecycleScope.launch {
+            delay(SEND_TIMEOUT_MS)
+            if (!reachedTerminal && isResumed) {
+                twig("SendFinal: no terminal state after ${SEND_TIMEOUT_MS}ms; surfacing failure instead of spinning")
+                updateUi(timeoutUiModel())
+            }
+        }
     }
 
     override fun onAttach(context: Context) {
@@ -56,6 +75,9 @@ class SendFinalFragment : BaseFragment<FragmentSendFinalBinding>() {
         if (tx == null || !isResumed) return // TODO: maybe log this
 
         try {
+            if (tx.isSubmitSuccess() || tx.isFailure() || tx.isCancelled()) {
+                reachedTerminal = true
+            }
             tx.toUiModel().let { model ->
                 updateUi(model)
             }
@@ -153,6 +175,26 @@ class SendFinalFragment : BaseFragment<FragmentSendFinalBinding>() {
                 }
             }
         }
+    }
+
+    private fun timeoutUiModel() = UiModel().also { model ->
+        model.title = getString(R.string.send_final_button_primary_failed)
+        model.errorMessage = getString(R.string.send_final_error_submitting)
+        model.errorDescription =
+            "交易未在预期时间内完成，可能被网络拒绝（例如承诺树 anchor 不合法）。请到交易记录查看是否已发出；若未发出请重试。\n" +
+                "The transaction did not complete in time and may have been rejected by the network. " +
+                "Check your transaction history; if it did not send, try again."
+        model.primaryButtonText = getString(R.string.send_final_button_primary_retry)
+        model.primaryAction = { onReturnToSend() }
+        model.showSecondaryButton = true
+        model.showCloseIcon = true
+        model.showProgress = false
+    }
+
+    companion object {
+        // A send (encode proof + submit + observe result) resolves in seconds normally; 90s is a
+        // generous ceiling after which we surface failure rather than spin forever.
+        private const val SEND_TIMEOUT_MS = 90_000L
     }
 
     // fields are ordered, as they appear, top-to-bottom in the UI because that makes it easier to reason about each screen state

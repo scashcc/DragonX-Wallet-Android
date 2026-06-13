@@ -134,7 +134,11 @@ internal class PagedTransactionRepository private constructor(
         private suspend fun buildDatabase(context: Context, databasePath: String): DerivedDataDb {
             twig("Building dataDb and applying migrations")
             return Room.databaseBuilder(context, DerivedDataDb::class.java, databasePath)
-                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+                // WAL lets the Rust scanner connection and this Room connection see each other's
+                // committed writes immediately. With the previous TRUNCATE mode Room could read a
+                // stale "last scanned height", causing blocks to be re-scanned and note witnesses to
+                // be advanced incorrectly -> invalid sapling anchor on later (change-note) spends.
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .setQueryExecutor(SdkExecutors.DATABASE_IO)
                 .setTransactionExecutor(SdkExecutors.DATABASE_IO)
                 .addMigrations(DerivedDataDb.MIGRATION_3_4)
