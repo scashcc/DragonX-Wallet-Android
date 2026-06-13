@@ -67,6 +67,24 @@ jobs:
           key: cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: cargo-
 
+      # 关键：换 librustzcash 后 Cargo.lock 过期，cargo 会把一批传递依赖升级到 2024 新版(要求更高 Rust)。
+      # 先让 lock 与新 librustzcash 对齐，再把已知高 MSRV 的依赖用 --precise 精确压回 2022 版本，
+      # 并打印完整漂移清单(committed -> final)，一次性暴露剩余需要钉的库。
+      - name: 对齐并压回 Cargo 依赖版本
+        working-directory: dragonx-android-wallet-sdk/sdk-lib
+        run: |
+          set -e
+          cp Cargo.lock /tmp/committed.lock
+          cargo update -p zcash_primitives -p zcash_client_backend -p zcash_client_sqlite -p zcash_proofs || true
+          for pin in proc-macro2@1.0.47 subtle@2.4.1 syn@1.0.104 quote@1.0.21; do
+            echo "pin ${pin%@*} -> ${pin#*@}"
+            cargo update -p "${pin%@*}" --precise "${pin#*@}" || true
+          done
+          echo "=====DRIFT committed -> final (> 是最终被改的版本)====="
+          diff <(awk '/^name =/{n=$3} /^version =/{print n, $3}' /tmp/committed.lock | sort) \
+               <(awk '/^name =/{n=$3} /^version =/{print n, $3}' Cargo.lock | sort) || true
+          echo "=====END DRIFT====="
+
       # 第一步：编译 SDK（含 Rust 引擎），发布到本机 mavenLocal 供 App 引用
       - name: 编译 SDK 并发布到 mavenLocal
         working-directory: dragonx-android-wallet-sdk
