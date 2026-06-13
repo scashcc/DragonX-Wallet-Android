@@ -97,6 +97,9 @@
         <action
             android:id="@+id/action_nav_profile_to_nav_awesome"
             app:destination="@id/nav_awesome" />
+        <action
+            android:id="@+id/action_nav_profile_to_nav_export_keys"
+            app:destination="@id/nav_export_keys" />
     </fragment>
     <fragment
         android:id="@+id/nav_feedback"
@@ -287,6 +290,11 @@
             app:action="android.intent.action.VIEW"
             app:data="@string/seedphrase_more_info_url" />
     </fragment>
+
+    <fragment
+        android:id="@+id/nav_export_keys"
+        android:name="cash.z.ecc.android.ui.profile.ExportKeysFragment"
+        tools:layout="@layout/fragment_export_keys" />
 
     <fragment
         android:id="@+id/nav_restore"

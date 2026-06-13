@@ -53,7 +53,7 @@ android {
 
         zcashmainnet {
             dimension 'network'
-            buildConfigField "String", "DEFAULT_SERVER_URL", '"lite.dragonx.is"'
+            buildConfigField "String", "DEFAULT_SERVER_URL", '"hk.dragonx.cc"'
             matchingFallbacks = ['zcashmainnet', 'release']
         }
     }

@@ -51,6 +51,16 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                 }
             }
         }
+        binding.buttonExportKeys.setOnClickListener {
+            mainActivity?.let { main ->
+                main.authenticate(
+                    getString(R.string.biometric_backup_phrase_description),
+                    getString(R.string.biometric_backup_phrase_title)
+                ) {
+                    main.safeNavigate(R.id.action_nav_profile_to_nav_export_keys)
+                }
+            }
+        }
         binding.buttonRescan.setOnClickListener {
             tapped(PROFILE_RESCAN)
             onRescanWallet()

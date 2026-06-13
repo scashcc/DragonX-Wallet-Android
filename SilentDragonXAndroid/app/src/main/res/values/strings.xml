@@ -1,6 +1,20 @@
 <resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
     <!-- Common -->
     <string name="done">@string/translated_button_done</string>
+
+    <!-- Export keys screen -->
+    <string name="export_keys_title">Export Keys 导出密钥</string>
+    <string name="export_keys_warning">⚠️ Anyone who has these keys can spend all of your funds. Never share them with anyone, and never type them into a website. 拥有这些密钥的人可以动用你的全部资金，请务必保密，切勿分享，也不要输入到任何网站。</string>
+    <string name="export_keys_label_seed">Seed phrase (24 words) 助记词（24 个单词）</string>
+    <string name="export_keys_label_birthday">Wallet birthday height 钱包生日高度</string>
+    <string name="export_keys_label_spending_key">Sapling spending key / private key 隐私私钥</string>
+    <string name="export_keys_label_address">Shielded address 隐私地址</string>
+    <string name="export_keys_copy_seed">Copy seed phrase 复制助记词</string>
+    <string name="export_keys_copy_key">Copy spending key 复制私钥</string>
+    <string name="export_keys_copy_address">Copy address 复制地址</string>
+    <string name="export_keys_not_found">(not found 未找到)</string>
+    <string name="profile_export_keys">Export Keys 导出私钥</string>
+
     <string name="cancel">@string/missing_cancel</string>
     <string name="unknown">@string/translated_send_unknown</string>
     <string name="blank"></string>

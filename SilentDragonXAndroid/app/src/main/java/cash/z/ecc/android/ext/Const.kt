@@ -1,7 +1,6 @@
 package cash.z.ecc.android.ext
 
 import cash.z.ecc.android.BuildConfig
-import kotlin.random.Random
 
 object Const {
     /**
@@ -47,8 +46,10 @@ object Const {
      */
     object Default {
         object Server {
-            // Select a random server from list
+            // The first entry is the default. hk.dragonx.cc is the known-good DragonX
+            // node (TLS on 443); the lite*.dragonx.is servers are selectable alternates.
             val serverList = listOf(
+                "hk.dragonx.cc",
                 "lite.dragonx.is",
                 "lite1.dragonx.is",
                 "lite2.dragonx.is",
@@ -56,10 +57,8 @@ object Const {
                 "lite4.dragonx.is",
                 "lite5.dragonx.is"
             )
-            private val randomIndex = Random.nextInt(serverList.size);
-            private val randomServer = serverList[randomIndex]
 
-            val HOST = randomServer
+            val HOST = serverList.first()
             const val PORT = 443
         }
     }
