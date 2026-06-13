@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.1.4-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.1.5-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,14 +130,15 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.1.4 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.1.5 (build #${{ github.run_number }})
 
-            本次更新（转账 Bug 修复尝试 + 体验改进）：
-            • 数据库启用 WAL：让 Rust 扫描与 Room 互看已提交写入，杜绝重复扫描把「找零 note」的见证算坏 —— 针对“连续转账第 3 笔报 missing sapling anchor”。⚠️ 实验性，请实测验证。
-            • 发送超时安全网：交易若 90 秒内没有结果，会明确提示「失败」可重试，不再无限转圈。
-            • 仍包含 v1.1.3 的「导出私钥/助记词」+ 默认服务器 hk.dragonx.cc:443。
+            本次更新（修复同步问题，重点版本）：
+            • 修复「同步卡在 Scanning 95% 不动、要杀进程重开才显示完成/余额」：把数据库改回 TRUNCATE 模式（v1.1.4 的 WAL 会让进度读到旧值、反复重扫最后几千块、永不完成）。
+            • 修复「区块库损坏(database disk image is malformed)后只能卸载重装」：现在检测到损坏会自动清除区块数据并重新同步，助记词/地址不受影响，无需重装、无需重输助记词。
+            • 清除数据时一并删除 -wal/-shm/-journal 残留文件，避免新库再次被弄坏。
+            • 新增手动入口：我的(Profile) → Rescan Wallet → 清除并重新同步（一键删块重扫，自动重启）。
 
-            实测建议：完整同步到 100% 后，连续发 3 笔以上小额，重点看第 3 笔是否成功（之前会卡）。
+            ⚠️ 说明：v1.1.4 尝试用 WAL 修转账 Bug，但反而引入了上面的同步故障，本版已撤销。转账 Bug（连续第 3 笔 missing anchor）仍待单独处理。
 
-            安装：下载 **DragonX-Wallet-v1.1.4-universal.apk**（兼容所有机型）。placeholder 测试签名，需先卸载旧版再装；卸载前务必已备份 24 词助记词。
+            安装：下载 **DragonX-Wallet-v1.1.5-universal.apk**（兼容所有机型）。placeholder 测试签名，需先卸载旧版再装；卸载前务必已备份 24 词助记词。
           files: artifacts/*.apk

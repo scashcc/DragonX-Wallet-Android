@@ -201,14 +201,14 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
 
     private fun onWipe() {
         mainActivity?.showConfirmation(
-            "Are you sure?",
-            "Wiping your data will close the app. Since your seed is preserved, " +
-                "this operation is probably safe but please backup your seed anyway." +
-                "\n\nContinue?",
-            "Wipe"
+            "清除区块数据并重新同步？",
+            "将删除本地区块数据并从头同步（用于修复同步卡住或区块库损坏）。\n\n" +
+                "你的助记词和地址不受影响，无需重装，也不用重新输入助记词。\n\n" +
+                "应用会自动重启并开始重新同步。是否继续？",
+            "清除并重新同步"
         ) {
             viewModel.wipe()
-            mainActivity?.finish()
+            mainActivity?.restartApp()
         }
     }
 

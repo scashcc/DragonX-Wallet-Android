@@ -50,6 +50,7 @@ import cash.z.ecc.android.feedback.Report.NonUserAction.FEEDBACK_STOPPED
 import cash.z.ecc.android.feedback.Report.NonUserAction.SYNC_START
 import cash.z.ecc.android.feedback.Report.Tap.COPY_ADDRESS
 import cash.z.ecc.android.feedback.Report.Tap.COPY_TRANSPARENT_ADDRESS
+import cash.z.ecc.android.sdk.Initializer
 import cash.z.ecc.android.sdk.SdkSynchronizer
 import cash.z.ecc.android.sdk.db.entity.ConfirmedTransaction
 import cash.z.ecc.android.sdk.exception.CompactBlockProcessorException
@@ -62,7 +63,9 @@ import cash.z.ecc.android.ui.util.MemoUtil
 import cash.z.ecc.android.util.twig
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity(R.layout.main_activity) {
 
@@ -536,6 +539,18 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
     private var ignoredErrors = 0
     private var reorgCount = 0
     private fun onProcessorError(error: Throwable?): Boolean {
+        // A corrupt block database ("database disk image is malformed") cannot be fixed by
+        // retrying or reopening the wallet -- previously the only fix was a full reinstall. Detect
+        // it and automatically wipe the (re-downloadable) block data and resync. The seed/keys live
+        // in separate secure storage and are NOT touched, so the user keeps their wallet.
+        if (isDatabaseCorruption(error)) {
+            twig("Detected block-database corruption; clearing block data and resyncing. error=$error")
+            clearBlockDataAndRestart()
+            // Return true (rather than false) so the SDK keeps the loop alive briefly instead of
+            // escalating to the "Unrecoverable Error" critical handler -- our recovery coroutine
+            // stops the synchronizer and restarts the app from under it.
+            return true
+        }
         var notified = false
         when (error) {
             is CompactBlockProcessorException.Uninitialized -> {
@@ -610,6 +625,98 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
         reorgCount++
         twig("Chain reorg detected (#$reorgCount): error at $errorHeight, rewinding to $rewindHeight")
         feedback.report(Reorg(errorHeight, rewindHeight))
+    }
+
+    @Volatile
+    private var recoveryInProgress = false
+
+    /**
+     * Walk the cause chain looking for a SQLite corruption signature. The block databases can
+     * become corrupt if the app process is killed mid-write; once that happens, every scan attempt
+     * throws "database disk image is malformed" and the wallet can no longer sync.
+     */
+    private fun isDatabaseCorruption(error: Throwable?): Boolean {
+        var t: Throwable? = error
+        var depth = 0
+        while (t != null && depth < 12) {
+            if (t is android.database.sqlite.SQLiteDatabaseCorruptException) return true
+            val msg = (t.message ?: "").lowercase(java.util.Locale.US)
+            if (msg.contains("malformed") ||
+                msg.contains("sqlite_corrupt") ||
+                msg.contains("database disk image") ||
+                msg.contains("file is not a database") ||
+                msg.contains("(code 11")
+            ) {
+                return true
+            }
+            t = t.cause
+            depth++
+        }
+        return false
+    }
+
+    /**
+     * Delete the local block databases (cache + data) and restart the app to resync from the
+     * wallet birthday. The seed/keys live in separate secure storage and are NOT touched, so this
+     * does NOT require the user to re-enter their seed words or reinstall the app.
+     *
+     * A short cool-down guards against a restart loop: if we just did this, show the manual repair
+     * dialog instead of silently restarting again.
+     */
+    private fun clearBlockDataAndRestart() {
+        if (recoveryInProgress) return
+        recoveryInProgress = true
+
+        val recoveryPrefs = getSharedPreferences("dragonx_recovery", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val last = recoveryPrefs.getLong("last_auto_recovery_ms", 0L)
+        if (now - last < 120_000L) {
+            twig("Auto-recovery ran <2min ago; not looping. Showing manual repair dialog.")
+            recoveryInProgress = false
+            runOnUiThread {
+                if (dialog == null) {
+                    dialog = showReorgRepairDialog { dialog = null }
+                }
+            }
+            return
+        }
+        recoveryPrefs.edit().putLong("last_auto_recovery_ms", now).apply()
+
+        runOnUiThread {
+            ignoreScanFailure = true
+            dialog?.dismiss()
+            dialog = null
+            setLoading(true, "区块数据损坏，正在清除并重新同步…")
+            showSnackbar("检测到区块数据损坏，正在自动修复：清除区块数据并重新同步（助记词不受影响，无需重装）")
+        }
+
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                runCatching { DependenciesHolder.synchronizer.stop() }
+                    .onFailure { twig("recovery: synchronizer.stop failed: $it") }
+                runCatching {
+                    Initializer.erase(
+                        applicationContext,
+                        ZcashWalletApp.instance.defaultNetwork
+                    )
+                }.onFailure { twig("recovery: erase failed: $it") }
+            }
+            restartApp()
+        }
+    }
+
+    /**
+     * Relaunch the app process cleanly. Used after clearing block data so the SDK rebuilds its
+     * databases from scratch (from the stored birthday) on the next launch.
+     */
+    fun restartApp() {
+        twig("Restarting app to complete block-data recovery")
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val component = launchIntent?.component
+        if (component != null) {
+            startActivity(Intent.makeRestartActivityTask(component))
+        }
+        Runtime.getRuntime().exit(0)
     }
 
     // TODO: maybe move this quick helper code somewhere general or throttle the dialogs differently (like with a flow and stream operators, instead)

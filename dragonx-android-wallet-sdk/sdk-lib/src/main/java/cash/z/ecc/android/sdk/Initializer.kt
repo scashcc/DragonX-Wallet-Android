@@ -464,8 +464,12 @@ class Initializer private constructor(
          * @return true when a file exists at the given path and was deleted.
          */
         private suspend fun deleteDb(filePath: String): Boolean {
-            // just try the journal file. Doesn't matter if it's not there.
+            // Remove the SQLite side-car files too. Doesn't matter if they're not there.
+            // -wal/-shm in particular must be removed, otherwise leftover write-ahead-log data
+            // from a previous run can resurrect/corrupt a freshly recreated database.
             delete("$filePath-journal")
+            delete("$filePath-wal")
+            delete("$filePath-shm")
 
             return delete(filePath)
         }

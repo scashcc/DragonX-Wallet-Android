@@ -779,6 +779,13 @@ class CompactBlockProcessor internal constructor(
                 } while (result && scannedNewBlocks && lastScannedHeight < range.endInclusive)
                 twig("batch scan complete! Total time: ${metrics.cumulativeTime}  Total blocks measured: ${metrics.cumulativeItems}  Cumulative bps: ${metrics.cumulativeIps.format()}")
             }
+            // Reflect the freshest scanned height so the wallet can settle into SYNCED (and refresh
+            // the balance) promptly, instead of lagging a batch behind the actual scan progress.
+            if (result) {
+                getLastScannedHeight()?.let {
+                    if (it != currentInfo.lastScannedHeight) updateProgress(lastScannedHeight = it)
+                }
+            }
             Twig.clip("scanning")
             result
         }
@@ -1037,28 +1044,48 @@ class CompactBlockProcessor internal constructor(
      * @return the last scanned height reported by the repository.
      */
     suspend fun getLastScannedHeight(): BlockHeight? {
-        // Query the data DB directly using a fresh SQLite connection to bypass
-        // Room's cached connection. The Rust scanner writes to this database
-        // via its own SQLite connection and Room (TRUNCATE journal mode) may
-        // not see those changes through its cached connection.
+        // Query the data DB directly with a fresh SQLite connection rather than going through
+        // Room's pooled connection. The Rust scanner writes to this same database file via its
+        // own SQLite connection; with the data DB in TRUNCATE (rollback journal) mode every
+        // committed write lands in the main database file immediately, so a fresh read here always
+        // observes the scanner's latest progress.
+        //
+        // NOTE: do NOT switch the data DB to WAL mode. A read-only connection like this one cannot
+        // reliably see writes still sitting in the -wal file, which makes this return a stale
+        // height -> the wallet appears stuck near the end of "Scanning" and re-scans forever.
         return withContext(IO) {
             val dbPath = (rustBackend as RustBackend).pathDataDb
-            var height: Long? = null
-            val db = android.database.sqlite.SQLiteDatabase.openDatabase(
-                dbPath,
-                null,
-                android.database.sqlite.SQLiteDatabase.OPEN_READONLY
-            )
+            var db: android.database.sqlite.SQLiteDatabase? = null
             try {
-                val cursor = db.rawQuery("SELECT MAX(height) FROM blocks", null)
-                if (cursor.moveToFirst() && !cursor.isNull(0)) {
-                    height = cursor.getLong(0)
+                db = android.database.sqlite.SQLiteDatabase.openDatabase(
+                    dbPath,
+                    null,
+                    android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+                )
+                // Wait briefly instead of failing if the scanner connection is mid-write.
+                db.rawQuery("PRAGMA busy_timeout = 3000", null).use { it.moveToFirst() }
+                var height: Long? = null
+                db.rawQuery("SELECT MAX(height) FROM blocks", null).use { cursor ->
+                    if (cursor.moveToFirst() && !cursor.isNull(0)) {
+                        height = cursor.getLong(0)
+                    }
                 }
-                cursor.close()
+                height?.let { BlockHeight.new(network, it) }
+            } catch (c: android.database.sqlite.SQLiteDatabaseCorruptException) {
+                // The data DB file is corrupt. Surface this clearly so the wallet layer can wipe the
+                // (re-downloadable) block databases and resync -- the seed/keys are stored
+                // separately -- instead of crashing in a tight retry loop forever (the only previous
+                // recovery was a full reinstall).
+                twig("ERROR: data DB is corrupt while reading last scanned height: $c")
+                throw c
+            } catch (t: Throwable) {
+                // Transient problem (e.g. the file is briefly locked by the scanner). Fall back to
+                // the last value we already know so the sync loop keeps making progress.
+                twig("Warning: could not read last scanned height ($t); using cached ${currentInfo.lastScannedHeight}")
+                currentInfo.lastScannedHeight
             } finally {
-                db.close()
+                db?.close()
             }
-            height?.let { BlockHeight.new(network, it) }
         }
     }
 

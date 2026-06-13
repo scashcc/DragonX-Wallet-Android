@@ -9,8 +9,8 @@ object Deps {
     const val compileSdkVersion =   31
     const val minSdkVersion =       21
     const val targetSdkVersion =    30
-    const val versionName =         "1.1.4"
-    const val versionCode =         1_01_04_800  // last digits are alpha(0XX) beta(2XX) rc(4XX) release(8XX). Ex: 1_08_04_401 is an release candidate build of version 1.8.4 and 1_08_04_800 would be the final release.
+    const val versionName =         "1.1.5"
+    const val versionCode =         1_01_05_800  // last digits are alpha(0XX) beta(2XX) rc(4XX) release(8XX). Ex: 1_08_04_401 is an release candidate build of version 1.8.4 and 1_08_04_800 would be the final release.
     const val packageName =         "dragonx.android"
 
 

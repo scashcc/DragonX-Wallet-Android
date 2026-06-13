@@ -32,10 +32,17 @@ internal class RustBackend private constructor(
         if (clearCacheDb) {
             twig("Deleting the cache database!")
             File(pathCacheDb).deleteSuspend()
+            // also remove the SQLite side-car files so nothing stale is left behind
+            File("$pathCacheDb-journal").deleteSuspend()
+            File("$pathCacheDb-wal").deleteSuspend()
+            File("$pathCacheDb-shm").deleteSuspend()
         }
         if (clearDataDb) {
             twig("Deleting the data database!")
             File(pathDataDb).deleteSuspend()
+            File("$pathDataDb-journal").deleteSuspend()
+            File("$pathDataDb-wal").deleteSuspend()
+            File("$pathDataDb-shm").deleteSuspend()
         }
     }
 

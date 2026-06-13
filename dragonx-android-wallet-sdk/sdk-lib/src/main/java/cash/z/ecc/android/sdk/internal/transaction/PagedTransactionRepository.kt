@@ -134,11 +134,16 @@ internal class PagedTransactionRepository private constructor(
         private suspend fun buildDatabase(context: Context, databasePath: String): DerivedDataDb {
             twig("Building dataDb and applying migrations")
             return Room.databaseBuilder(context, DerivedDataDb::class.java, databasePath)
-                // WAL lets the Rust scanner connection and this Room connection see each other's
-                // committed writes immediately. With the previous TRUNCATE mode Room could read a
-                // stale "last scanned height", causing blocks to be re-scanned and note witnesses to
-                // be advanced incorrectly -> invalid sapling anchor on later (change-note) spends.
-                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+                // IMPORTANT: keep this on TRUNCATE (rollback journal), NOT WAL.
+                // The Rust scanner and this app both open this same database file with their own
+                // SQLite connections. In TRUNCATE mode every committed write lands in the main
+                // database file immediately, so the processor's fresh read-only "last scanned
+                // height" query always sees the scanner's latest progress.
+                // WAL was tried here and backfired: a read-only connection cannot reliably see
+                // writes still sitting in the -wal file, so the wallet got stuck near the end of
+                // "Scanning", re-scanned the same blocks forever, and the two SQLite libraries
+                // sharing -wal/-shm made the data DB prone to "database disk image is malformed".
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .setQueryExecutor(SdkExecutors.DATABASE_IO)
                 .setTransactionExecutor(SdkExecutors.DATABASE_IO)
                 .addMigrations(DerivedDataDb.MIGRATION_3_4)

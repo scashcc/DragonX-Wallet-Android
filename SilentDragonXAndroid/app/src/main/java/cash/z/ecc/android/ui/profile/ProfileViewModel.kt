@@ -94,7 +94,7 @@ class ProfileViewModel : ViewModel() {
         synchronizer.stop()
         Toast.makeText(
             ZcashWalletApp.instance,
-            "SUCCESS! Wallet data cleared. Please relaunch to rescan!",
+            "已清除区块数据，正在重新同步…",
             Toast.LENGTH_LONG
         ).show()
         runBlocking {
