@@ -11,7 +11,7 @@ permissions:
 
 env:
   ANDROID_NDK_VER: "22.1.7171670"   # 与 SDK gradle.properties 中 ANDROID_NDK_VERSION 一致
-  RUSTUP_TOOLCHAIN: "1.51.0"        # librustzcash(2021) 需要的 Rust 版本，强制全程使用
+  RUSTUP_TOOLCHAIN: "1.65.0"        # Cargo.lock 于 2022-11 解析(libc0.2.137/cc1.0.77,edition2021)，需 Rust>=1.56；用 1.65 匹配其年代
 
 jobs:
   build:
@@ -27,12 +27,12 @@ jobs:
           distribution: temurin
           java-version: "11"
 
-      - name: 安装 Rust 1.51.0 + 4 个安卓目标
+      - name: 安装 Rust 1.65.0 + 4 个安卓目标
         run: |
           set -e
-          rustup toolchain install 1.51.0 --profile minimal
-          rustup default 1.51.0
-          rustup target add --toolchain 1.51.0 \
+          rustup toolchain install 1.65.0 --profile minimal
+          rustup default 1.65.0
+          rustup target add --toolchain 1.65.0 \
             armv7-linux-androideabi aarch64-linux-android i686-linux-android x86_64-linux-android
           rustc --version
 
