@@ -81,4 +81,5 @@ DecompileChecker.kt
 backup-dbs/
 *.db
 .DS_Store
-sdk-lib/Cargo.lock
+# 注意：Cargo.lock 必须提交，否则 CI 无锁文件会把依赖解析成 2024 新版导致 MSRV 编译失败
+# sdk-lib/Cargo.lock
