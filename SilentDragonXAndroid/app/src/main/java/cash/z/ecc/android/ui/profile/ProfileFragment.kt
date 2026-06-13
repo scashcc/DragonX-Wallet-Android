@@ -61,6 +61,11 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                 }
             }
         }
+        binding.buttonConsolidate.setOnClickListener {
+            // Consolidation is a self-send (funds stay with the user), so no biometric gate is
+            // needed here; the consolidation screen has its own confirmation step.
+            mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_consolidate)
+        }
         binding.buttonRescan.setOnClickListener {
             tapped(PROFILE_RESCAN)
             onRescanWallet()

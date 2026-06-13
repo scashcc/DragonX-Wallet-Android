@@ -17,6 +17,11 @@ internal interface RustBackendWelding {
 
     val network: ZcashNetwork
 
+    companion object {
+        /** Sentinel returned by [consolidateToAddress] when there is nothing left to consolidate. */
+        const val NOTHING_TO_CONSOLIDATE = -2L
+    }
+
     suspend fun createToAddress(
         consensusBranchId: Long,
         account: Int,
@@ -30,6 +35,17 @@ internal interface RustBackendWelding {
         extsk: String,
         tsk: String,
         memo: ByteArray? = byteArrayOf()
+    ): Long
+
+    /**
+     * Runs one round of small-note consolidation (a self-send sweeping up to [maxInputs] of the
+     * smallest notes). Returns the new transaction's row id on success, or
+     * [NOTHING_TO_CONSOLIDATE] when there is nothing left worth consolidating. Throws on error.
+     */
+    suspend fun consolidateToAddress(
+        account: Int,
+        extsk: String,
+        maxInputs: Int
     ): Long
 
     suspend fun decryptAndStoreTransaction(tx: ByteArray)

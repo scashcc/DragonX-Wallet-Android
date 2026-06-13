@@ -59,6 +59,19 @@ internal class WalletTransactionEncoder(
             ?: throw TransactionEncoderException.TransactionNotFoundException(transactionId)
     }
 
+    override suspend fun createConsolidationTransaction(
+        spendingKey: String,
+        maxInputs: Int,
+        fromAccountIndex: Int
+    ): EncodedTransaction? {
+        val transactionId = createConsolidationSpend(spendingKey, maxInputs, fromAccountIndex)
+        if (transactionId == RustBackendWelding.NOTHING_TO_CONSOLIDATE) {
+            return null
+        }
+        return repository.findEncodedTransactionById(transactionId)
+            ?: throw TransactionEncoderException.TransactionNotFoundException(transactionId)
+    }
+
     /**
      * Utility function to help with validation. This is not called during [createTransaction]
      * because this class asserts that all validation is done externally by the UI, for now.
@@ -156,6 +169,35 @@ internal class WalletTransactionEncoder(
             }
         }.also { result ->
             twig("result of shieldToAddress: $result")
+        }
+    }
+
+    /**
+     * Runs one round of small-note consolidation in the Rust backend. Returns the row id of the
+     * created transaction, or [RustBackendWelding.NOTHING_TO_CONSOLIDATE] when there is nothing
+     * left worth consolidating. On average each round takes several seconds (it generates a zk
+     * proof per input).
+     */
+    private suspend fun createConsolidationSpend(
+        spendingKey: String,
+        maxInputs: Int,
+        fromAccountIndex: Int = 0
+    ): Long {
+        return twigTask("creating consolidation transaction sweeping up to $maxInputs notes") {
+            try {
+                SaplingParamTool.ensureParams((rustBackend as RustBackend).pathParamsDir)
+                twig("params exist! attempting to consolidate...")
+                rustBackend.consolidateToAddress(
+                    fromAccountIndex,
+                    spendingKey,
+                    maxInputs
+                )
+            } catch (t: Throwable) {
+                twig("Consolidation failed due to: ${t.message}")
+                throw t
+            }
+        }.also { result ->
+            twig("result of consolidateToAddress: $result")
         }
     }
 }

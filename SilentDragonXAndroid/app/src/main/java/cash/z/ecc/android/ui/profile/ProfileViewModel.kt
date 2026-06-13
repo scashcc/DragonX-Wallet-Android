@@ -78,6 +78,20 @@ class ProfileViewModel : ViewModel() {
         } ?: throw IllegalStateException("Seed was expected but it was not found!")
     }
 
+    /**
+     * Runs the automatic small-note consolidation sweep on the first account. Emits one
+     * [PendingTransaction] per round as it is submitted; completes when nothing is left to
+     * consolidate. See [Synchronizer.consolidate].
+     */
+    fun consolidate(): Flow<PendingTransaction> {
+        return lockBox.getBytes(Const.Backup.SEED)?.let {
+            val sk = runBlocking { DerivationTool.deriveSpendingKeys(it, synchronizer.network)[0] }
+            synchronizer.consolidate(sk).onEach { tx ->
+                twig("Received consolidation txUpdate: ${tx?.toString()}")
+            }
+        } ?: throw IllegalStateException("Seed was expected but it was not found!")
+    }
+
     fun setEasterEggTriggered() {
         lockBox.setBoolean(Const.Pref.EASTER_EGG_TRIGGERED_SHIELDING, true)
     }

@@ -21,6 +21,7 @@ import cash.z.ecc.android.sdk.db.entity.PendingTransaction
 import cash.z.ecc.android.sdk.db.entity.hasRawTransactionId
 import cash.z.ecc.android.sdk.db.entity.isCancelled
 import cash.z.ecc.android.sdk.db.entity.isExpired
+import cash.z.ecc.android.sdk.db.entity.isFailedEncoding
 import cash.z.ecc.android.sdk.db.entity.isFailedSubmit
 import cash.z.ecc.android.sdk.db.entity.isLongExpired
 import cash.z.ecc.android.sdk.db.entity.isMarkedForDeletion
@@ -723,6 +724,48 @@ class SdkSynchronizer internal constructor(
         twig("Monitoring shielding transaction (id: ${it.id}) for updates...")
         txManager.monitorById(it.id)
     }.distinctUntilChanged()
+
+    override fun consolidate(
+        spendingKey: String,
+        fromAccountIndex: Int
+    ): Flow<PendingTransaction> = flow {
+        twig("Initializing consolidation sweep")
+        val zAddr = getAddress(fromAccountIndex)
+        var rounds = 0
+        // Each round sweeps up to MAX_CONSOLIDATION_INPUTS of the smallest notes into one note.
+        // Because the notes spent in a round are immediately locked, the next round picks up the
+        // next batch, so the whole wallet is consolidated in one burst without waiting for
+        // confirmations. The loop ends when encodeConsolidation returns null (nothing left).
+        while (true) {
+            val placeHolderTx = txManager.initSpend(Zatoshi(0), zAddr, "", fromAccountIndex)
+            val encodedTx = txManager.encodeConsolidation(
+                spendingKey,
+                placeHolderTx,
+                ZcashSdk.MAX_CONSOLIDATION_INPUTS,
+                fromAccountIndex
+            ) ?: break // null => nothing left worth consolidating; we're done
+            if (encodedTx.isFailedEncoding()) {
+                twig("[consolidation] encoding failed at round ${rounds + 1}; stopping")
+                emit(encodedTx)
+                break
+            }
+            rounds++
+            val resultTx = if (encodedTx.isCancelled()) {
+                twig("[consolidation] round $rounds was cancelled; cleaning up")
+                if (cleanupCancelledTx(encodedTx)) refreshAllBalances()
+                encodedTx
+            } else {
+                txManager.submit(encodedTx)
+            }
+            emit(resultTx)
+            if (resultTx.isFailedSubmit()) {
+                twig("[consolidation] submit failed at round $rounds; stopping")
+                break
+            }
+        }
+        twig("[consolidation] finished after $rounds round(s)")
+        refreshAllBalances()
+    }
 
     override suspend fun refreshUtxos(address: String, startHeight: BlockHeight): Int? {
         return processor.refreshUtxos(address, startHeight)

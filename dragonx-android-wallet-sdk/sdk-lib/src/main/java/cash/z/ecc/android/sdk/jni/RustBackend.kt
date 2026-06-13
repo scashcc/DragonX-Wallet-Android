@@ -244,6 +244,22 @@ internal class RustBackend private constructor(
         )
     }
 
+    override suspend fun consolidateToAddress(
+        account: Int,
+        extsk: String,
+        maxInputs: Int
+    ): Long = withContext(SdkDispatchers.DATABASE_IO) {
+        consolidateToAddress(
+            pathDataDb,
+            account,
+            extsk,
+            maxInputs,
+            "$pathParamsDir/$SPEND_PARAM_FILE_NAME",
+            "$pathParamsDir/$OUTPUT_PARAM_FILE_NAME",
+            networkId = network.id
+        )
+    }
+
     override suspend fun shieldToAddress(
         extsk: String,
         tsk: String,
@@ -510,6 +526,17 @@ internal class RustBackend private constructor(
             extsk: String,
             tsk: String,
             memo: ByteArray,
+            spendParamsPath: String,
+            outputParamsPath: String,
+            networkId: Int
+        ): Long
+
+        @JvmStatic
+        private external fun consolidateToAddress(
+            dbDataPath: String,
+            account: Int,
+            extsk: String,
+            maxInputs: Int,
             spendParamsPath: String,
             outputParamsPath: String,
             networkId: Int

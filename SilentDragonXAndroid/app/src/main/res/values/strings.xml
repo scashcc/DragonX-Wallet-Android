@@ -15,6 +15,21 @@
     <string name="export_keys_not_found">(not found 未找到)</string>
     <string name="profile_export_keys">Export Keys 导出私钥</string>
 
+    <!-- Consolidate small notes (合并零钱) -->
+    <string name="profile_consolidate">合并零钱 Consolidate</string>
+    <string name="consolidate_title">合并零钱 Consolidate</string>
+    <string name="consolidate_explanation">如果你收到过很多笔小额转入（例如矿池打款），钱包里会积累成百上千个“零钱”碎片。转大额时，钱包要把几百个碎片塞进一笔交易，体积过大会被矿工拒绝打包，最终超时失败。\n\n点击下方按钮，钱包会全自动把这些零钱合并成几个大额，无需你逐笔操作。合并笔数会根据你的零钱数量自动决定。完成并确认后，就能正常转出大额了。\n\nIf your wallet received many small payments, it holds hundreds of tiny notes. This automatically merges them into a few large ones so you can send normally again.</string>
+    <string name="consolidate_fee_note">每合并一笔需支付网络手续费 0.0001 DRGX（DragonX 节点对隐私交易要求的最低手续费）。\nA network fee of 0.0001 DRGX applies per consolidation transaction.</string>
+    <string name="consolidate_start">开始自动合并 Start</string>
+    <string name="consolidate_running">正在合并零钱，请保持应用打开、屏幕常亮…\n已提交 %1$d 笔</string>
+    <string name="consolidate_done">✅ 合并完成！共提交 %1$d 笔合并交易。\n等待区块确认（约几分钟）后，余额会重新可用，即可正常转出大额。</string>
+    <string name="consolidate_none">✅ 你的零钱已经很整齐，无需合并。</string>
+    <string name="consolidate_error">合并未完成：%1$s</string>
+    <string name="consolidate_need_sync">请先等待钱包同步完成（进度条满）再合并零钱。Please wait until the wallet is fully synced.</string>
+    <string name="consolidate_confirm_title">开始合并零钱？</string>
+    <string name="consolidate_confirm_message">钱包将自动把零钱碎片合并成几个大额，全程自动进行，可能持续几分钟。期间请保持应用打开、屏幕常亮。是否开始？</string>
+    <string name="send_final_error_fragmented">余额充足，但你的“零钱”过于分散，一次转不出这么多。请先到「我的 → 合并零钱」自动合并，再来转账。\nYour balance is enough, but it is split into too many small notes. Use “合并零钱 / Consolidate” in the Profile tab first, then send.</string>
+
     <string name="cancel">@string/missing_cancel</string>
     <string name="unknown">@string/translated_send_unknown</string>
     <string name="blank"></string>

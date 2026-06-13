@@ -100,6 +100,9 @@
         <action
             android:id="@+id/action_nav_profile_to_nav_export_keys"
             app:destination="@id/nav_export_keys" />
+        <action
+            android:id="@+id/action_nav_profile_to_nav_consolidate"
+            app:destination="@id/nav_consolidate" />
     </fragment>
     <fragment
         android:id="@+id/nav_feedback"
@@ -295,6 +298,11 @@
         android:id="@+id/nav_export_keys"
         android:name="cash.z.ecc.android.ui.profile.ExportKeysFragment"
         tools:layout="@layout/fragment_export_keys" />
+
+    <fragment
+        android:id="@+id/nav_consolidate"
+        android:name="cash.z.ecc.android.ui.profile.ConsolidateFragment"
+        tools:layout="@layout/fragment_consolidate" />
 
     <fragment
         android:id="@+id/nav_restore"

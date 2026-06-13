@@ -144,7 +144,7 @@ class HistoryViewModel : ViewModel() {
                         bottomValue =
                             "\$${WalletZecFormmatter.toZecStringFull(Zatoshi((tx?.valueInZatoshi?.value ?: 0) + ZcashSdk.MINERS_FEE.value))}"
                         iconRotation = 135f
-                        fee = "+ 0.00001 network fee"
+                        fee = "+ ${WalletZecFormmatter.toZecStringFull(ZcashSdk.MINERS_FEE)} network fee"
                         source = getString(R.string.transaction_story_from_shielded)
                         address = tx?.toAddress
                     }

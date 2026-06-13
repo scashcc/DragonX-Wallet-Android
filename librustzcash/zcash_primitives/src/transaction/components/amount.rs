@@ -4,7 +4,12 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 pub const COIN: i64 = 1_0000_0000;
 pub const MAX_MONEY: i64 = 21_000_000 * COIN;
 
-pub const DEFAULT_FEE: Amount = Amount(1000);
+// DragonX: the node requires shielded transactions to pay at least
+// ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE = 10000 zatoshi (0.0001 DRGX) to be accepted to
+// the mempool and mined (see dragonx/src/wallet/asyncrpcoperation_sendmany.h and the
+// AcceptToMemoryPool shielded-fee branch in main.cpp). The old 1000 zatoshi default was
+// 10x too low, so large shielded txs sat in the mempool and expired. Bumped to 10000.
+pub const DEFAULT_FEE: Amount = Amount(10000);
 
 /// A type-safe representation of some quantity of Zcash.
 ///

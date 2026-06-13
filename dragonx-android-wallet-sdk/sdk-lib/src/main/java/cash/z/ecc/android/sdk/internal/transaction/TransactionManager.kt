@@ -48,6 +48,20 @@ interface OutboundTransactionManager {
     ): PendingTransaction
 
     /**
+     * Encode one round of a small-note consolidation transaction (a self-send sweeping up to
+     * [maxInputs] of the smallest notes).
+     *
+     * @return the encoded pending transaction ready to submit, or null when there is nothing left
+     * worth consolidating (in which case the placeholder has been removed).
+     */
+    suspend fun encodeConsolidation(
+        spendingKey: String,
+        pendingTx: PendingTransaction,
+        maxInputs: Int,
+        fromAccountIndex: Int
+    ): PendingTransaction?
+
+    /**
      * Submits the transaction represented by [pendingTx] to lightwalletd to broadcast to the
      * network and, hopefully, include in the next block.
      *

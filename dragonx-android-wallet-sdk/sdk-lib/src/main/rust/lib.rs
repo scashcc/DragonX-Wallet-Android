@@ -16,7 +16,7 @@ use jni::{
 };
 use log::Level;
 use secp256k1::key::{PublicKey, SecretKey};
-use zcash_client_backend::data_api::wallet::{shield_funds, ANCHOR_OFFSET};
+use zcash_client_backend::data_api::wallet::{consolidate_notes, shield_funds, ANCHOR_OFFSET};
 use zcash_client_backend::{
     address::RecipientAddress,
     data_api::{
@@ -1085,6 +1085,73 @@ pub unsafe extern "C" fn Java_cash_z_ecc_android_sdk_jni_RustBackend_createToAdd
             OvkPolicy::Sender,
         )
         .map_err(|e| format_err!("Error while creating transaction: {}", e))
+    });
+    unwrap_exc_or(&env, res, -1)
+}
+
+/// DragonX: run one round of small-note consolidation (a self-send sweeping up to
+/// `max_inputs` of the smallest notes). Returns the new transaction's row id on success,
+/// `-2` when there is nothing left worth consolidating, or `-1` on error. The Kotlin side
+/// loops on this until it sees `-2`.
+#[no_mangle]
+pub unsafe extern "C" fn Java_cash_z_ecc_android_sdk_jni_RustBackend_consolidateToAddress(
+    env: JNIEnv<'_>,
+    _: JClass<'_>,
+    db_data: JString<'_>,
+    account: jint,
+    extsk: JString<'_>,
+    max_inputs: jint,
+    spend_params: JString<'_>,
+    output_params: JString<'_>,
+    network_id: jint,
+) -> jlong {
+    let res = panic::catch_unwind(|| {
+        let network = parse_network(network_id as u32)?;
+        let db_data = wallet_db(&env, network, db_data)?;
+        let mut db_data = db_data.get_update_ops()?;
+        let account = if account >= 0 {
+            account as u32
+        } else {
+            return Err(format_err!("account argument must be positive"));
+        };
+        let extsk = utils::java_string_to_rust(&env, extsk);
+        let max_inputs = if max_inputs > 0 {
+            max_inputs as usize
+        } else {
+            45usize
+        };
+        let spend_params = utils::java_string_to_rust(&env, spend_params);
+        let output_params = utils::java_string_to_rust(&env, output_params);
+
+        let extsk =
+            match decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &extsk)
+            {
+                Ok(Some(extsk)) => extsk,
+                Ok(None) => {
+                    return Err(format_err!("ExtendedSpendingKey is for the wrong network"));
+                }
+                Err(e) => {
+                    return Err(format_err!("Invalid ExtendedSpendingKey: {}", e));
+                }
+            };
+
+        let prover = LocalTxProver::new(Path::new(&spend_params), Path::new(&output_params));
+
+        match consolidate_notes(
+            &mut db_data,
+            &network,
+            prover,
+            AccountId(account),
+            &extsk,
+            max_inputs,
+            OvkPolicy::Sender,
+        )
+        .map_err(|e| format_err!("Error while consolidating notes: {}", e))?
+        {
+            Some(tx_ref) => Ok(tx_ref),
+            // Nothing left worth consolidating; signal the Kotlin loop to stop.
+            None => Ok(-2i64),
+        }
     });
     unwrap_exc_or(&env, res, -1)
 }

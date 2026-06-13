@@ -177,6 +177,45 @@ class PersistentTransactionManager(
         return tx
     }
 
+    override suspend fun encodeConsolidation(
+        spendingKey: String,
+        pendingTx: PendingTransaction,
+        maxInputs: Int,
+        fromAccountIndex: Int
+    ): PendingTransaction? = withContext(Dispatchers.IO) {
+        twig("managing the creation of a consolidation transaction")
+        val tx = pendingTx as PendingTransactionEntity
+        val encodedTx = try {
+            twig("beginning to encode consolidation transaction with : $encoder")
+            encoder.createConsolidationTransaction(spendingKey, maxInputs, fromAccountIndex)
+        } catch (t: Throwable) {
+            var message = "failed to encode consolidation transaction due to : ${t.message}"
+            t.cause?.let { message += " caused by: $it" }
+            twig(message)
+            safeUpdate("updating consolidation transaction error info") {
+                updateError(tx.id, message, ERROR_ENCODING)
+                updateEncodeAttempts(tx.id, max(1, tx.encodeAttempts + 1))
+            }
+            return@withContext findById(tx.id)
+        }
+
+        if (encodedTx == null) {
+            // Nothing left worth consolidating: drop the empty placeholder and signal completion.
+            twig("[consolidation] nothing left to consolidate; removing placeholder ${tx.id}")
+            safeUpdate("removing empty consolidation placeholder") {
+                delete(tx)
+            }
+            return@withContext null
+        }
+
+        twig("successfully encoded consolidation transaction!")
+        safeUpdate("updating consolidation transaction encoding", -1) {
+            updateEncoding(tx.id, encodedTx.raw, encodedTx.txId, encodedTx.expiryHeight)
+            updateEncodeAttempts(tx.id, max(1, tx.encodeAttempts + 1))
+        }
+        findById(tx.id)
+    }
+
     override suspend fun submit(pendingTx: PendingTransaction): PendingTransaction = withContext(Dispatchers.IO) {
         // reload the tx to check for cancellation
         var tx = pendingTransactionDao { findById(pendingTx.id) }

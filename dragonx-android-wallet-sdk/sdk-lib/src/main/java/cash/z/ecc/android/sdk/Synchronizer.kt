@@ -218,6 +218,25 @@ interface Synchronizer {
     ): Flow<PendingTransaction>
 
     /**
+     * Consolidate (合并零钱) the wallet's many small notes into a few large ones by sweeping them,
+     * a batch at a time, back to the wallet's own shielded address. This defragments wallets that
+     * have received many small payments (e.g. mining-pool payouts) so that later spends need only
+     * a few inputs and get mined immediately instead of stalling and expiring.
+     *
+     * The whole sweep runs automatically: the returned flow emits one [PendingTransaction] per
+     * round as it is submitted, and completes when there is nothing left worth consolidating
+     * (emitting nothing at all if the wallet is already well-consolidated). The number of rounds
+     * adapts to how fragmented the wallet is.
+     *
+     * @param spendingKey the spending key for the account being consolidated.
+     * @param fromAccountIndex the account to consolidate. Defaults to the first account.
+     */
+    fun consolidate(
+        spendingKey: String,
+        fromAccountIndex: Int = 0
+    ): Flow<PendingTransaction>
+
+    /**
      * Returns true when the given address is a valid z-addr. Invalid addresses will throw an
      * exception. Valid z-addresses have these characteristics: //TODO copy info from related ZIP
      *

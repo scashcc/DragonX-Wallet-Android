@@ -87,43 +87,55 @@ pub fn get_unspent_sapling_notes<P>(
     notes.collect::<Result<_, _>>()
 }
 
+/// DragonX: cap the number of notes a single spend may select. The node's miner treats a
+/// shielded tx with >= 50 inputs as "large" and packs at most one such tx per block
+/// (LARGE_ZINS_THRESHOLD=50 / LARGE_ZINS_MAX=1 in dragonx/src/miner.cpp), so big-input
+/// spends stall in the mempool and expire. Staying under 50 keeps every spend a "normal"
+/// tx that miners include immediately. 45 leaves a safe margin.
+pub const MAX_TX_SPENDS: usize = 45;
+
 pub fn select_unspent_sapling_notes<P>(
     wdb: &WalletDb<P>,
     account: AccountId,
     target_value: Amount,
     anchor_height: BlockHeight,
 ) -> Result<Vec<SpendableNote>, SqliteClientError> {
-    // The goal of this SQL statement is to select the oldest notes until the required
-    // value has been reached, and then fetch the witnesses at the desired height for the
-    // selected notes. This is achieved in several steps:
+    // DragonX: select the *largest* notes first and cap the number selected at
+    // MAX_TX_SPENDS, so a spend never exceeds the node's 50-input "large tx" threshold.
+    // Steps:
     //
-    // 1) Use a window function to create a view of all notes, ordered from oldest to
-    //    newest, with an additional column containing a running sum:
-    //    - Unspent notes accumulate the values of all unspent notes in that note's
-    //      account, up to itself.
-    //    - Spent notes accumulate the values of all notes in the transaction they were
-    //      spent in, up to itself.
+    // 1) Window over all unspent notes ordered by value DESC, computing a running sum
+    //    (so_far) and a 1-based row index (idx).
     //
-    // 2) Select all unspent notes in the desired account, along with their running sum.
+    // 2) Take notes whose running sum is still below the target (within the first
+    //    MAX_TX_SPENDS rows), plus the single note that first brings the running sum
+    //    to/above the target.
     //
-    // 3) Select all notes for which the running sum was less than the required value, as
-    //    well as a single note for which the sum was greater than or equal to the
-    //    required value, bringing the sum of all selected notes across the threshold.
+    // 3) If even the largest MAX_TX_SPENDS notes can't reach the target, fewer-than-needed
+    //    value is returned and the caller reports "insufficient balance" — the user should
+    //    consolidate small notes first.
     //
-    // 4) Match the selected notes against the witnesses at the desired height.
+    // 4) Match the selected notes against the witnesses at the desired anchor height.
     let mut stmt_select_notes = wdb.conn.prepare(
         "WITH selected AS (
             WITH eligible AS (
                 SELECT id_note, diversifier, value, rcm,
                     SUM(value) OVER
-                        (PARTITION BY account, spent ORDER BY id_note) AS so_far
+                        (PARTITION BY account, spent ORDER BY value DESC, id_note) AS so_far,
+                    ROW_NUMBER() OVER
+                        (PARTITION BY account, spent ORDER BY value DESC, id_note) AS idx
                 FROM received_notes
                 INNER JOIN transactions ON transactions.id_tx = received_notes.tx
                 WHERE account = :account AND spent IS NULL AND transactions.block <= :anchor_height
             )
-            SELECT * FROM eligible WHERE so_far < :target_value
+            SELECT id_note, diversifier, value, rcm, so_far FROM eligible
+                WHERE so_far < :target_value AND idx <= :max_inputs
             UNION
-            SELECT * FROM (SELECT * FROM eligible WHERE so_far >= :target_value LIMIT 1)
+            SELECT id_note, diversifier, value, rcm, so_far FROM (
+                SELECT id_note, diversifier, value, rcm, so_far FROM eligible
+                    WHERE so_far >= :target_value AND idx <= :max_inputs
+                    ORDER BY so_far LIMIT 1
+            )
         ), witnesses AS (
             SELECT note, witness FROM sapling_witnesses
             WHERE block = :anchor_height
@@ -139,6 +151,7 @@ pub fn select_unspent_sapling_notes<P>(
             ":account": &i64::from(account.0),
             ":anchor_height": &u32::from(anchor_height),
             ":target_value": &i64::from(target_value),
+            ":max_inputs": &(MAX_TX_SPENDS as i64),
         ],
         to_spendable_note,
     )?;

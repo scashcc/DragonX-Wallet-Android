@@ -32,6 +32,20 @@ interface TransactionEncoder {
     ): EncodedTransaction
 
     /**
+     * Creates one round of a small-note consolidation transaction: a self-send that sweeps up to
+     * [maxInputs] of the wallet's smallest notes into a single larger note. Used to defragment
+     * wallets with many tiny notes so later spends stay under the node's large-tx threshold.
+     *
+     * @return the encoded consolidation transaction, or null when there is nothing left worth
+     * consolidating (fewer than two spendable notes).
+     */
+    suspend fun createConsolidationTransaction(
+        spendingKey: String,
+        maxInputs: Int,
+        fromAccountIndex: Int = 0
+    ): EncodedTransaction?
+
+    /**
      * Utility function to help with validation. This is not called during [createTransaction]
      * because this class asserts that all validation is done externally by the UI, for now.
      *

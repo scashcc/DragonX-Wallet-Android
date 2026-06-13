@@ -153,9 +153,16 @@ class SendFinalFragment : BaseFragment<FragmentSendFinalBinding>() {
             }
             isFailure() -> {
                 model.title = getString(R.string.send_final_button_primary_failed)
-                model.errorMessage = if (isFailedEncoding()) getString(R.string.send_final_error_encoding) else getString(
-                    R.string.send_final_error_submitting
-                )
+                // The send screen already prevents sending more than the total available balance, so
+                // an "insufficient balance" error reaching here means the funds exist but are split
+                // across too many small notes to fit in one (capped-input) transaction. Point the
+                // user at 合并零钱 (consolidation) instead of a misleading "insufficient funds".
+                model.errorMessage = when {
+                    errorMessage?.contains("Insufficient", ignoreCase = true) == true ->
+                        getString(R.string.send_final_error_fragmented)
+                    isFailedEncoding() -> getString(R.string.send_final_error_encoding)
+                    else -> getString(R.string.send_final_error_submitting)
+                }
                 model.errorDescription = errorMessage.toString()
                 model.primaryButtonText = getString(R.string.send_final_button_primary_retry)
                 model.primaryAction = { onReturnToSend() }

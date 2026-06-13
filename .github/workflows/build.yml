@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.1.5-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.1.6-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,15 +130,16 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.1.5 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.1.6 (build #${{ github.run_number }})
 
-            本次更新（修复同步问题，重点版本）：
-            • 修复「同步卡在 Scanning 95% 不动、要杀进程重开才显示完成/余额」：把数据库改回 TRUNCATE 模式（v1.1.4 的 WAL 会让进度读到旧值、反复重扫最后几千块、永不完成）。
-            • 修复「区块库损坏(database disk image is malformed)后只能卸载重装」：现在检测到损坏会自动清除区块数据并重新同步，助记词/地址不受影响，无需重装、无需重输助记词。
-            • 清除数据时一并删除 -wal/-shm/-journal 残留文件，避免新库再次被弄坏。
-            • 新增手动入口：我的(Profile) → Rescan Wallet → 清除并重新同步（一键删块重扫，自动重启）。
+            本次更新（重点修复「大额转不出去」+ 新增合并零钱）：
+            • 【根因修复】查清了大额转账发不出去的真正原因：DragonX 节点的矿工对「输入≥50 个的隐私交易」每个区块只打包 1 笔，且手续费过低的会被直接跳过。矿池打款用户钱包里有几百个零钱碎片，转大额时会把几百个塞进一笔，必被卡住、约 12 分钟后过期失败。
+            • 单笔交易输入数封顶 45 个（低于节点 50 的阈值）并优先选用大额 note —— 普通转账现在是「正常交易」，矿工会立即打包。
+            • 手续费由 0.00001 提高到 0.0001 DRGX（与节点对隐私交易要求的最低费一致），不再因费率过低被矿工忽略而过期。
+            • 【新功能】合并零钱（我的 → 合并零钱）：一键全自动把成百上千个零钱碎片合并成几个大额，合并笔数按你的零钱数量自动决定，全程自动、无需逐笔操作。矿池打款用户请先合并零钱，之后即可正常转大额。
+            • 转账若因「零钱过于分散」失败，会明确提示去「合并零钱」，不再误报为余额不足。
 
-            ⚠️ 说明：v1.1.4 尝试用 WAL 修转账 Bug，但反而引入了上面的同步故障，本版已撤销。转账 Bug（连续第 3 笔 missing anchor）仍待单独处理。
+            使用顺序（矿池/多笔小额到账的用户）：先完成同步 → 我的 → 合并零钱 → 等几分钟确认 → 再正常转账。
 
-            安装：下载 **DragonX-Wallet-v1.1.5-universal.apk**（兼容所有机型）。placeholder 测试签名，需先卸载旧版再装；卸载前务必已备份 24 词助记词。
+            安装：下载 **DragonX-Wallet-v1.1.6-universal.apk**（兼容所有机型）。placeholder 测试签名，需先卸载旧版再装；卸载前务必已备份 24 词助记词。
           files: artifacts/*.apk

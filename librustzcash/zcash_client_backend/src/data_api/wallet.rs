@@ -408,3 +408,124 @@ where
         utxos_spent: utxos.iter().map(|utxo| utxo.outpoint.clone()).collect(),
     })
 }
+
+/// DragonX: consolidate up to `max_inputs` of the wallet's *smallest* spendable notes into a
+/// single note paid back to the wallet's own shielded address.
+///
+/// Wallets that receive many small payments (e.g. mining-pool payouts) accumulate hundreds of
+/// tiny notes. A spend then has to include hundreds of inputs, producing a transaction that
+/// exceeds the node's 50-input "large tx" threshold (LARGE_ZINS_THRESHOLD in
+/// dragonx/src/miner.cpp) so it never gets mined and expires. Sweeping the smallest notes into
+/// one larger note — repeatedly, a batch at a time — defragments the wallet so later spends
+/// need only a handful of inputs.
+///
+/// Each call performs exactly one round (at most `max_inputs` inputs, kept below 50). Callers
+/// loop until this returns `Ok(None)`, which signals there is nothing left worth consolidating
+/// (fewer than two spendable notes, or the gathered dust can't cover the fee). Because the
+/// notes spent in one round are immediately marked spent, successive rounds pick up the next
+/// batch, so the whole wallet can be consolidated in a single burst without waiting for
+/// confirmations.
+#[allow(clippy::too_many_arguments)]
+pub fn consolidate_notes<E, N, P, D, R>(
+    wallet_db: &mut D,
+    params: &P,
+    prover: impl TxProver,
+    account: AccountId,
+    extsk: &ExtendedSpendingKey,
+    max_inputs: usize,
+    ovk_policy: OvkPolicy,
+) -> Result<Option<R>, E>
+where
+    E: From<Error<N>>,
+    P: consensus::Parameters + Clone,
+    R: Copy + Debug,
+    D: WalletWrite<Error = E, TxRef = R>,
+{
+    // Check that the ExtendedSpendingKey corresponds to the account we are consolidating.
+    let extfvk = ExtendedFullViewingKey::from(extsk);
+    if !wallet_db.is_valid_account_extfvk(account, &extfvk)? {
+        return Err(E::from(Error::InvalidExtSk(account)));
+    }
+
+    let ovk = match ovk_policy {
+        OvkPolicy::Sender => Some(extfvk.fvk.ovk),
+        OvkPolicy::Custom(ovk) => Some(ovk),
+        OvkPolicy::Discard => None,
+    };
+
+    // Target the next block, assuming we are up-to-date.
+    let (height, anchor_height) = wallet_db
+        .get_target_and_anchor_heights()
+        .and_then(|x| x.ok_or_else(|| Error::ScanRequired.into()))?;
+
+    // Gather all spendable notes and take the smallest `max_inputs` of them. Sweeping the
+    // smallest notes first is what actually clears dust fragmentation.
+    let mut notes = wallet_db.get_unspent_sapling_notes(account, anchor_height)?;
+    if notes.len() < 2 {
+        // Nothing worth consolidating (a single note is already "consolidated").
+        return Ok(None);
+    }
+    notes.sort_by_key(|n| n.note_value);
+    let cap = max_inputs.max(2);
+    if notes.len() > cap {
+        notes.truncate(cap);
+    }
+
+    let total = notes.iter().map(|n| n.note_value).sum::<Amount>();
+    let fee = DEFAULT_FEE;
+    if total <= fee {
+        // The dust we could gather doesn't even cover the fee; stop. For real wallets whose
+        // payouts are at or above the network fee this never triggers.
+        return Ok(None);
+    }
+    let amount_to_self = total - fee;
+
+    // Pay the consolidated value back to our own shielded address.
+    let z_address = extsk.default_address().unwrap().1;
+
+    let mut builder = Builder::new(params.clone(), height);
+    for selected in notes {
+        let from = extfvk
+            .fvk
+            .vk
+            .to_payment_address(selected.diversifier)
+            .unwrap();
+
+        let note = from
+            .create_note(selected.note_value.into(), selected.rseed)
+            .unwrap();
+
+        let merkle_path = selected.witness.path().expect("the tree is not empty");
+
+        builder
+            .add_sapling_spend(extsk.clone(), selected.diversifier, note, merkle_path)
+            .map_err(Error::Builder)?;
+    }
+
+    builder
+        .add_sapling_output(ovk, z_address.clone(), amount_to_self, MemoBytes::empty())
+        .map_err(Error::Builder)?;
+
+    let consensus_branch_id = BranchId::for_height(params, height);
+    let (tx, tx_metadata) = builder
+        .build(consensus_branch_id, &prover)
+        .map_err(Error::Builder)?;
+    let output_index = tx_metadata.output_index(0).expect(
+        "No sapling output was created in the consolidation transaction. This is a programming error.",
+    );
+
+    wallet_db
+        .store_sent_tx(&SentTransaction {
+            tx: &tx,
+            created: time::OffsetDateTime::now_utc(),
+            account,
+            outputs: vec![SentTransactionOutput {
+                output_index,
+                recipient_address: &RecipientAddress::Shielded(z_address),
+                value: amount_to_self,
+                memo: None,
+            }],
+            utxos_spent: vec![],
+        })
+        .map(Some)
+}

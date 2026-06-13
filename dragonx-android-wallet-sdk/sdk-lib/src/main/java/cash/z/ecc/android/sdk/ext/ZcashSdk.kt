@@ -11,9 +11,18 @@ import cash.z.ecc.android.sdk.model.Zatoshi
 object ZcashSdk {
 
     /**
-     * Miner's fee in zatoshi.
+     * Miner's fee in zatoshi. DragonX requires shielded transactions to pay at least
+     * 10000 zatoshi (0.0001 DRGX) — this matches the node's
+     * ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE and the Rust DEFAULT_FEE. Keep these in sync.
      */
-    val MINERS_FEE = Zatoshi(1_000L)
+    val MINERS_FEE = Zatoshi(10_000L)
+
+    /**
+     * Maximum number of input notes to sweep per consolidation round. Must stay below the node's
+     * 50-input "large transaction" threshold (LARGE_ZINS_THRESHOLD in dragonx/src/miner.cpp) so
+     * each consolidation tx is a "normal" tx that miners include immediately. 45 leaves a margin.
+     */
+    const val MAX_CONSOLIDATION_INPUTS = 45
 
     /**
      * The theoretical maximum number of blocks in a reorg, due to other bottlenecks in the protocol design.
