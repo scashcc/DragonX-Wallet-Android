@@ -410,7 +410,23 @@ class Initializer private constructor(
         ): Boolean {
             val cacheDeleted = deleteDb(cacheDbPath(appContext, network, alias))
             val dataDeleted = deleteDb(dataDbPath(appContext, network, alias))
-            return dataDeleted || cacheDeleted
+            // Also clear the outbound (pending) transaction DB. Otherwise a transaction that can
+            // never confirm -- e.g. one that accidentally double-spends an already-spent note --
+            // survives the wipe and keeps getting rebroadcast every poll interval forever. Before
+            // this, only a full app reinstall cleared those stuck transactions.
+            val pendingDeleted = deleteDb(pendingDbPath(appContext))
+            return dataDeleted || cacheDeleted || pendingDeleted
+        }
+
+        /**
+         * Returns the path to the pending-transactions database. Unlike the cache/data DBs this one
+         * is not alias/network-prefixed (see [PersistentTransactionManager]'s default name).
+         */
+        private suspend fun pendingDbPath(appContext: Context): String {
+            val parentDir: String =
+                appContext.getDatabasePathSuspend("unused.db").parentFile?.absolutePath
+                    ?: throw InitializerException.DatabasePathException
+            return File(parentDir, "PendingTransactions.db").absolutePath
         }
 
         //
