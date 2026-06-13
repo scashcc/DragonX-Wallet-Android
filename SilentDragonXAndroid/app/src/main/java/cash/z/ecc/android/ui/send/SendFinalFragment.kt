@@ -177,24 +177,33 @@ class SendFinalFragment : BaseFragment<FragmentSendFinalBinding>() {
         }
     }
 
+    // IMPORTANT: this is NOT a failure screen. A large transfer must generate one zk-SNARK proof
+    // per input note on the phone, which for a many-input send (e.g. a mining wallet full of small
+    // notes) can legitimately take several minutes. The previous version showed "失败" + a one-tap
+    // "retry" here, which (a) lied to the user while the proof was still being generated and (b)
+    // caused the retry to RE-SEND and double-spend the same notes. Instead, reassure the user and
+    // above all tell them NOT to resend. The real result still arrives via onPendingTxUpdated.
     private fun timeoutUiModel() = UiModel().also { model ->
-        model.title = getString(R.string.send_final_button_primary_failed)
-        model.errorMessage = getString(R.string.send_final_error_submitting)
+        model.title = "交易处理中，请稍候…"
+        model.errorMessage = ""
         model.errorDescription =
-            "交易未在预期时间内完成，可能被网络拒绝（例如承诺树 anchor 不合法）。请到交易记录查看是否已发出；若未发出请重试。\n" +
-                "The transaction did not complete in time and may have been rejected by the network. " +
-                "Check your transaction history; if it did not send, try again."
-        model.primaryButtonText = getString(R.string.send_final_button_primary_retry)
-        model.primaryAction = { onReturnToSend() }
-        model.showSecondaryButton = true
+            "大额转账需要为每一笔输入在手机上生成零知识证明，笔数多时可能要几分钟，请耐心等待。\n\n" +
+                "⚠️ 请【不要重复发送】：交易很可能已经成功广播，重复发送会因「重复花费」被网络拒绝。\n\n" +
+                "稍后可到「交易记录」查看最终结果。\n\n" +
+                "Large sends generate a zero-knowledge proof per input on your phone and can take " +
+                "several minutes. Do NOT resend — it is likely already broadcast. Check history."
+        model.primaryButtonText = getString(R.string.send_final_button_primary_details)
+        model.primaryAction = { onSeeDetails() }
+        model.showSecondaryButton = false
         model.showCloseIcon = true
-        model.showProgress = false
+        model.showProgress = true
     }
 
     companion object {
-        // A send (encode proof + submit + observe result) resolves in seconds normally; 90s is a
-        // generous ceiling after which we surface failure rather than spin forever.
-        private const val SEND_TIMEOUT_MS = 90_000L
+        // After this delay, if the send hasn't reached a terminal state yet, show a reassuring
+        // "still processing, do NOT resend" message (NOT a failure). Kept short so the guidance
+        // appears before an impatient user retries, but it never marks a slow proof as failed.
+        private const val SEND_TIMEOUT_MS = 30_000L
     }
 
     // fields are ordered, as they appear, top-to-bottom in the UI because that makes it easier to reason about each screen state
