@@ -1,0 +1,14 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="api_block_explorer">https://explorer.dragonx.is/tx/%1$s</string>
+    <string name="fakebook_url" translatable="false">https://www.facebook.com/profile.php?id=100081853099621</string>
+    <string name="gitea_url" translatable="false">https://git.hush.is/dragonx/SilentDragonXAndroid/releases</string>
+    <string name="matrix_url" translatable="false">https://dragonx.is</string>
+    <string name="mastodon_url" translatable="false">https://hush.is/mastodon</string>
+    <string name="peertube_url" translatable="false">https://dragonx.is</string>
+    <string name="seedphrase_more_info_url">https://hush.is/seedphrase</string>
+    <string name="symbol" translatable="false">DRGX</string>
+    <string name="telegram_url" translatable="false">https://t.me/DragonXChain</string>
+    <string name="twatter_url" translatable="false">https://twitter.com/DragonXchain</string>
+    <string name="youtube_url" translatable="false">https://dragonx.is</string>
+    <string name="website_url" translatable="false">https://dragonx.is</string>
+</resources>

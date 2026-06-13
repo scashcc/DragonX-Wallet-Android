@@ -1,0 +1,175 @@
+package cash.z.ecc.android.ui.settings
+
+import android.content.res.ColorStateList
+import android.os.Bundle
+import android.util.Log
+import android.view.LayoutInflater
+import android.view.View
+import android.widget.Toast
+import androidx.core.view.ViewCompat.jumpDrawablesToCurrentState
+import androidx.core.widget.doAfterTextChanged
+import androidx.fragment.app.viewModels
+import cash.z.ecc.android.R
+import cash.z.ecc.android.ZcashWalletApp
+import cash.z.ecc.android.databinding.FragmentSettingsBinding
+import cash.z.ecc.android.di.DependenciesHolder.lockBox
+import cash.z.ecc.android.di.DependenciesHolder.prefs
+import cash.z.ecc.android.ext.*
+import cash.z.ecc.android.sdk.exception.LightWalletException
+import cash.z.ecc.android.sdk.ext.collectWith
+import cash.z.ecc.android.ui.base.BaseFragment
+import cash.z.ecc.android.util.twig
+import kotlinx.coroutines.launch
+
+class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
+
+    private val viewModel: SettingsViewModel by viewModels()
+
+    override fun inflate(inflater: LayoutInflater): FragmentSettingsBinding =
+        FragmentSettingsBinding.inflate(inflater)
+
+    //
+    // Lifecycle
+    //
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        mainActivity?.preventBackPress(this)
+        viewModel.init()
+        binding.apply {
+            groupLoading.gone()
+            hitAreaExit.onClickNavBack()
+            buttonReset.setOnClickListener(::onResetClicked)
+            buttonUpdate.setOnClickListener(::onUpdateClicked)
+            streetMode.setOnClickListener(::onStreetModeChecked)
+
+            val streetmode = lockBox.getBoolean(Const.Pref.STREET_MODE)
+            if(streetmode){
+                streetMode.isChecked = true
+            }
+
+            Log.d("SilentDragon", "streetMode: $streetmode")
+
+            buttonUpdate.isActivated = true
+            buttonReset.isActivated = true
+            inputHost.doAfterTextChanged {
+                viewModel.pendingHost = it.toString()
+            }
+            inputPort.doAfterTextChanged {
+                viewModel.pendingPortText = it.toString()
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.uiModels.collectWith(resumedScope, ::onUiModelUpdated)
+    }
+
+    //
+    // Event handlers
+    //
+
+    private fun onResetClicked(unused: View?) {
+        mainActivity?.hideKeyboard()
+        context?.showUpdateServerDialog(R.string.settings_buttons_restore) {
+            resumedScope.launch {
+                binding.groupLoading.visible()
+                binding.loadingView.requestFocus()
+                viewModel.resetServer()
+            }
+        }
+    }
+
+    private fun onUpdateClicked(unused: View?) {
+        mainActivity?.hideKeyboard()
+        context?.showUpdateServerDialog {
+            resumedScope.launch {
+                binding.groupLoading.visible()
+                binding.loadingView.requestFocus()
+                viewModel.submit()
+            }
+        }
+    }
+
+    private fun onStreetModeChecked(unused: View?) {
+        val streetmode = lockBox.getBoolean(Const.Pref.STREET_MODE)
+        Log.d("SilentDragon", "streetModeChecked! streetmode = $streetmode")
+        if(streetmode) {
+            lockBox.setBoolean(Const.Pref.STREET_MODE, false)
+        }
+        else{
+            lockBox.setBoolean(Const.Pref.STREET_MODE, true)
+        }
+    }
+
+    private fun onUiModelUpdated(uiModel: SettingsViewModel.UiModel) {
+        twig("onUiModelUpdated:::::$uiModel")
+        binding.apply {
+            if (handleCompletion(uiModel)) return@onUiModelUpdated
+
+            // avoid moving the cursor on instances where the change originated from the UI
+            if (inputHost.text.toString() != uiModel.host) inputHost.setText(uiModel.host)
+            if (inputPort.text.toString() != uiModel.portText) inputPort.setText(uiModel.portText)
+
+            buttonReset.isEnabled = uiModel.submitEnabled
+            buttonUpdate.isEnabled = uiModel.submitEnabled && !uiModel.hasError
+
+            uiModel.hostErrorMessage.let { it ->
+                textInputLayoutHost.helperText = it
+                    ?: R.string.settings_host_helper_text.toAppString()
+                textInputLayoutHost.setHelperTextColor(it.toHelperTextColor())
+            }
+            uiModel.portErrorMessage.let { it ->
+                textInputLayoutPort.helperText = it
+                    ?: R.string.settings_port_helper_text.toAppString()
+                textInputLayoutPort.setHelperTextColor(it.toHelperTextColor())
+            }
+        }
+    }
+
+    /**
+     * Handle the exit conditions and return true if we're done here.
+     */
+    private fun handleCompletion(uiModel: SettingsViewModel.UiModel): Boolean {
+        return if (uiModel.changeError != null) {
+            binding.groupLoading.gone()
+            onCriticalError(uiModel.changeError)
+            true
+        } else {
+            if (uiModel.complete) {
+                binding.groupLoading.gone()
+                mainActivity?.safeNavigate(R.id.nav_home)
+                Toast.makeText(ZcashWalletApp.instance, getString(R.string.settings_toast_change_server_success), Toast.LENGTH_SHORT).show()
+                true
+            }
+            false
+        }
+    }
+
+    private fun onCriticalError(error: Throwable) {
+        val details = if (error is LightWalletException.ChangeServerException.StatusException) {
+            error.status.description
+        } else {
+            error.javaClass.simpleName
+        }
+        val message = "An error occured while changing servers. Please verify the info" +
+            " and try again.\n\nError: $details"
+        twig(message)
+        Toast.makeText(ZcashWalletApp.instance, getString(R.string.settings_toast_change_server_failure), Toast.LENGTH_SHORT).show()
+        context?.showUpdateServerCriticalError(message)
+    }
+
+    //
+    // Utilities
+    //
+
+    private fun String?.toHelperTextColor(): ColorStateList {
+        val color = if (this == null) {
+            R.color.text_light_dimmed
+        } else {
+            R.color.zcashRed
+        }
+        return ColorStateList.valueOf(color.toAppColor())
+    }
+}

@@ -1,0 +1,117 @@
+name: Build DragonX Wallet APK
+
+# 触发方式：推送到 main 分支时自动构建；也可在 Actions 页面手动点 "Run workflow"
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write   # 允许把编译好的 APK 发布到 Releases
+
+env:
+  ANDROID_NDK_VER: "22.1.7171670"   # 与 SDK gradle.properties 中 ANDROID_NDK_VERSION 一致
+  RUSTUP_TOOLCHAIN: "1.51.0"        # librustzcash(2021) 需要的 Rust 版本，强制全程使用
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout 源码
+        uses: actions/checkout@v4
+
+      - name: 安装 JDK 11 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: 安装 Rust 1.51.0 + 4 个安卓目标
+        run: |
+          set -e
+          rustup toolchain install 1.51.0 --profile minimal
+          rustup default 1.51.0
+          rustup target add --toolchain 1.51.0 \
+            armv7-linux-androideabi aarch64-linux-android i686-linux-android x86_64-linux-android
+          rustc --version
+
+      - name: 安装 Android NDK r22 + 平台/构建工具
+        run: |
+          set -e
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" \
+            "ndk;${ANDROID_NDK_VER}" \
+            "platforms;android-31" "platforms;android-33" \
+            "build-tools;30.0.3" "build-tools;33.0.0"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${ANDROID_NDK_VER}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/${ANDROID_NDK_VER}" >> "$GITHUB_ENV"
+
+      - name: 缓存 Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/gradle.properties') }}
+          restore-keys: gradle-
+
+      - name: 缓存 Cargo (Rust 依赖与编译产物)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            dragonx-android-wallet-sdk/sdk-lib/target
+          key: cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-
+
+      # 第一步：编译 SDK（含 Rust 引擎），发布到本机 mavenLocal 供 App 引用
+      - name: 编译 SDK 并发布到 mavenLocal
+        working-directory: dragonx-android-wallet-sdk
+        run: |
+          set -e
+          chmod +x gradlew
+          ./gradlew :sdk-lib:publishToMavenLocal --no-daemon --stacktrace -PRELEASE_SIGNING_ENABLED=false
+
+      - name: 确认 SDK 已发布
+        run: ls -R ~/.m2/repository/hush/android/hush-android-sdk || true
+
+      # 第二步：编译 App（从 mavenLocal 取上面发布的 SDK），产出 release APK
+      - name: 编译 App (release APK)
+        working-directory: SilentDragonXAndroid
+        run: |
+          set -e
+          chmod +x gradlew
+          ./gradlew assembleZcashmainnetRelease --no-daemon --stacktrace
+
+      - name: 收集 APK
+        run: |
+          set -e
+          mkdir -p artifacts
+          find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
+          # 通用包（任何手机都能装）改成好认的名字
+          if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.1.2-universal.apk"
+          fi
+          echo "===== 产出的 APK ====="
+          ls -lh artifacts
+
+      - name: 上传 APK 到 Actions 工件
+        uses: actions/upload-artifact@v4
+        with:
+          name: dragonx-wallet-apks
+          path: artifacts/*.apk
+          if-no-files-found: error
+
+      - name: 发布到 Releases
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: DragonX Wallet build #${{ github.run_number }}
+          body: |
+            DragonX 安卓钱包自动编译版本（已修复转账 Bug + 重建底层库）。
+            手机安装 **DragonX-Wallet-v1.1.2-universal.apk** 即可（兼容所有机型）。
+          files: artifacts/*.apk

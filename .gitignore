@@ -1,0 +1,22 @@
+# Gradle / 构建产物
+**/build/
+**/.gradle/
+.gradle/
+
+# Rust 编译产物
+**/target/
+
+# IDE
+**/.idea/
+*.iml
+**/.run/
+
+# 本地配置（不要提交）
+**/local.properties
+local.properties
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 注意：sapling-*.params 与 placeholder.keystore 是编译必需文件，必须提交，不要忽略

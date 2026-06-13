@@ -1,0 +1,9 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# CI 在 Linux 上编译：gradlew / shell 必须 LF；密码学与签名二进制禁止转换
+gradlew text eol=lf
+*.sh text eol=lf
+*.params binary
+*.keystore binary
+*.jar binary

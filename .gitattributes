@@ -1,0 +1,24 @@
+# 仓库内文本统一规范化为 LF；CI 在 Linux 上编译，shell 脚本必须是 LF
+* text=auto
+
+# Shell / Gradle 包装脚本：强制 LF，否则 Linux 上无法执行（shebang 带 \r 会报 bad interpreter）
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows 批处理保持 CRLF
+*.bat text eol=crlf
+
+# 二进制文件：禁止任何换行/编码转换（损坏会导致无法生成交易证明或签名失败）
+*.params binary
+*.keystore binary
+*.jks binary
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.so binary
+*.a binary
+*.zip binary
+*.bin binary

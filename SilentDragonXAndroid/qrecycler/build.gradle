@@ -1,0 +1,39 @@
+import cash.z.ecc.android.Deps
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
+    compileSdkVersion Deps.compileSdkVersion
+
+    defaultConfig {
+        minSdkVersion Deps.minSdkVersion
+        targetSdkVersion Deps.targetSdkVersion
+
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    namespace 'cash.z.android.qrecycler'
+
+}
+
+dependencies {
+    implementation Deps.AndroidX.CORE_KTX
+    implementation Deps.Kotlin.STDLIB
+
+    // dependencies specific to this module, not shared with other modules
+    implementation Deps.Misc.Plugins.QR_SCANNER
+}

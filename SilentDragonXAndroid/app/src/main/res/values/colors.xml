@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--                  -->
+    <!-- palette: Android -->
+    <!--                  -->
+
+    <!-- colors here should map to a material design value -->
+
+    <color name="colorPrimary">@color/zcashWhite</color>
+    <color name="colorPrimaryMedium">#7C7C7C</color>
+    <color name="colorPrimaryDark">#454545</color>
+    <color name="colorAccent">#91a4b8</color>
+    <color name="colorSurface">@color/text_light</color>
+    <color name="colorOnSurface">@color/app_icon_background_0</color>
+
+
+    <!--                  -->
+    <!-- palette: Zcash   -->
+    <!--                  -->
+
+    <!-- colors here should have a hex value and a generic name, prefixed with zcash -->
+    <!-- This palette should be kept as small as possible
+     and should map directly to the design style guide -->
+
+    <color name="zcashWhite">#F5F5F5</color>
+    <color name="zcashGray">#616161</color>
+    <color name="zcashWhite_12">#1FFFFFFF</color>
+    <color name="zcashWhite_24">#3DFFFFFF</color>
+    <color name="zcashWhite_40">#66FFFFFF</color>
+    <color name="zcashWhite_50">#80FFFFFF</color>
+    <color name="zcashWhite_60">#A3FFFFFF</color>
+    <color name="zcashWhite_87">#BFFFFFFF</color>
+    <color name="zcashWhite_light">#EDEDED</color>
+    <color name="zcashBlack_light">#2B2B2B</color>
+    <color name="zcashBlack_12">#1F000000</color>
+    <color name="zcashBlack_40">#66000000</color>
+    <color name="zcashBlack_54">#8A000000</color>
+    <color name="zcashBlack_87">#DD000000</color>
+    <color name="zcashBlack_dark">#171717</color>
+    <color name="zcashBlack_0">#00000000</color>
+
+    <color name="zcashGreen">#66BB6A</color>
+    <color name="zcashRed">#BB666A</color>
+    <color name="zcashBlue">#26DAB6</color>
+    <color name="zcashBlueDark">#4A90E2</color>
+
+    <!-- yellows (greys) -->
+    <color name="zcashYellow_light">#B3B3B3</color>
+    <color name="zcashYellow">#666666</color>
+    <color name="zcashYellow_dark">#333333</color>
+
+    <!-- tab layout grey -->
+    <color name="unselected_tab_grey">#727272</color>
+
+
+    <!--                  -->
+    <!-- named colors     -->
+    <!--                  -->
+
+    <!-- every color here should be a reference to a palette color
+    but have a more useful name for use in code -->
+
+    <color name="app_icon_background_0">#FF3F3F4F</color>
+    <color name="app_icon_background_1">#FF000000</color>
+    <color name="app_icon_foreground">#FFFFFF</color>
+    <color name="background_banner">@color/zcashBlack_dark</color>
+    <color name="background_banner_stroke">#282828</color>
+    <color name="scan_overlay_background">@color/zcashBlack_87</color>
+    <color name="spacer">#1FBB666A</color>
+    <color name="text_send_amount_disabled">@color/text_light</color>
+
+    <!-- text -->
+    <color name="text_light">#FFFFFF</color>
+    <color name="text_light_dimmed">@color/zcashWhite_50</color>
+    <color name="text_dark">@color/zcashBlack_87</color>
+    <color name="text_dark_dimmed">@color/zcashBlack_54</color>
+    <color name="text_shadow">@color/zcashBlack_40</color>
+
+    <!-- text : pending design review -->
+    <!-- these are colors found in designs that fall near but outside the palette but may want to
+         replace existing palette colors, after design review -->
+    <color name="tx_text_light_dimmed">#9B9B9B</color>
+    <color name="tx_text_light_dimmed_less">#D3D3D3</color>
+    <color name="tx_circle_icon_bg">#494A4C</color>
+    <color name="tx_primary">#FFFFFF</color>
+
+    <!--transaction colors-->
+    <color name="transaction_sent">#B8B8B8</color>
+
+</resources>
