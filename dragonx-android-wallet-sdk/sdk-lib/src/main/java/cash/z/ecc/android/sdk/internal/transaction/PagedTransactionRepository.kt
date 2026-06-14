@@ -43,19 +43,29 @@ internal class PagedTransactionRepository private constructor(
     // Transaction Flows
     private val allTransactionsFactory = transactions.getAllTransactions().toRefreshable()
 
+    // IMPORTANT: fetchContext = the SAME single DB thread the Rust scanner writes on. The PagedList
+    // page-load queries default to Dispatchers.IO (a multi-thread pool); that ran the UI's transaction
+    // reads on a DIFFERENT thread than the scanner's writes, so opening "交易记录"/history while syncing
+    // hit the data DB from two SQLite libraries at once -> the scan stalled (SQLITE_BUSY) and the file
+    // got corrupted ("database disk image is malformed"), forcing a wipe+full resync. Pinning the fetch
+    // to DATABASE_IO serializes UI reads with scanner writes (no concurrent access, no corruption).
     override val receivedTransactions
         get() = flow<List<ConfirmedTransaction>> {
             emitAll(
-                transactions.getReceivedTransactions().toRefreshable().toFlowPagedList(pageSize)
+                transactions.getReceivedTransactions().toRefreshable()
+                    .toFlowPagedList(pageSize, fetchContext = SdkDispatchers.DATABASE_IO)
             )
         }
     override val sentTransactions
         get() = flow<List<ConfirmedTransaction>> {
-            emitAll(transactions.getSentTransactions().toRefreshable().toFlowPagedList(pageSize))
+            emitAll(
+                transactions.getSentTransactions().toRefreshable()
+                    .toFlowPagedList(pageSize, fetchContext = SdkDispatchers.DATABASE_IO)
+            )
         }
     override val allTransactions
         get() = flow<List<ConfirmedTransaction>> {
-            emitAll(allTransactionsFactory.toFlowPagedList(pageSize))
+            emitAll(allTransactionsFactory.toFlowPagedList(pageSize, fetchContext = SdkDispatchers.DATABASE_IO))
         }
 
     //

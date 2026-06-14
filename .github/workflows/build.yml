@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.4.4-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.4.5-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,10 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.4.4 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.4.5 (build #${{ github.run_number }})
 
             【本次更新】
+            • 【根治·重要】修复「同步时点开交易记录 → 同步停住 + 区块数据损坏(malformed) → 被迫清库重扫」的并发 Bug。根因：交易列表（PagedList）默认在多线程池 Dispatchers.IO 上查询数据库，而 Rust 扫描器在单线程 DATABASE_IO 上写同一个数据库文件——两套 SQLite 同时读写同一文件 → 锁冲突卡死 + 文件写坏。修法：把交易列表三个查询（全部/收款/转账）以及内部「已扫高度」只读查询全部钉到与扫描器共享的同一根 DATABASE_IO 单线程，读写严格串行、永不并发。现在同步过程中随便点交易记录都不会再让区块库损坏或中断同步。
             • 【可诊断】新增「同步日志文件」：以前 release 版同步过程完全不打日志，卡住了也看不出卡在哪。现在全程把「下载/校验/扫描」每一步连同每批耗时写进一个日志文件，随时可取出排查：`adb pull /sdcard/Android/data/dragonx.android/files/dragonx-sync.log`（同时也输出到 logcat 标签 DRGXSYNC/DRGXWALLET）。
             • 【更顺滑】扫描批大小 100→25：碎零钱很多的钱包在接近链顶时，每扫一块都要给每个未花零钱更新一次见证，一批 100 块可能要好几分钟、看着像卡死。改 25 后进度条更频繁前进、且每批都即时保存——中途被系统杀掉也只丢一点点、重开续扫不必从头。
             • 修「快速/完整重扫会失败」：当本地区块数据库已损坏（"database disk image is malformed"，多为进程被杀写坏）时，回退式重扫无法修复、必然失败。现在重扫一旦检测到这类损坏，自动升级为「清除并重新同步」（助记词/密钥不受影响、无需重装），不再卡在失败提示上。

@@ -28,6 +28,7 @@ import cash.z.ecc.android.sdk.ext.ZcashSdk.POLL_INTERVAL
 import cash.z.ecc.android.sdk.ext.ZcashSdk.RETRIES
 import cash.z.ecc.android.sdk.ext.ZcashSdk.REWIND_DISTANCE
 import cash.z.ecc.android.sdk.ext.ZcashSdk.SCAN_BATCH_SIZE
+import cash.z.ecc.android.sdk.internal.SdkDispatchers
 import cash.z.ecc.android.sdk.internal.Twig
 import cash.z.ecc.android.sdk.internal.block.CompactBlockDownloader
 import cash.z.ecc.android.sdk.internal.ext.retryUpTo
@@ -1073,7 +1074,12 @@ class CompactBlockProcessor internal constructor(
         // NOTE: do NOT switch the data DB to WAL mode. A read-only connection like this one cannot
         // reliably see writes still sitting in the -wal file, which makes this return a stale
         // height -> the wallet appears stuck near the end of "Scanning" and re-scans forever.
-        return withContext(IO) {
+        //
+        // Run on the single shared DATABASE_IO thread (the same one the Rust scanner and Room use) so
+        // this fresh read-only connection never opens while the scanner is mid-write on another thread
+        // (two SQLite libraries touching the file at once is what corrupts it). Serialized, it always
+        // reads a quiescent, committed file.
+        return withContext(SdkDispatchers.DATABASE_IO) {
             val dbPath = (rustBackend as RustBackend).pathDataDb
             var db: android.database.sqlite.SQLiteDatabase? = null
             try {
