@@ -85,6 +85,31 @@ class WalletSetupViewModel : ViewModel() {
         openStoredWallet()
     }
 
+    /**
+     * DragonX private-key restore: import a wallet from a Sapling spending key
+     * (secret-extended-key-main…) instead of a seed phrase. The full viewing key is derived from the
+     * spending key (which also validates it); the spending key is stored for spending. There is no
+     * seed/transparent component, so a placeholder extpub is stored (see [cash.z.ecc.android.ext.Keys]).
+     */
+    suspend fun importWalletFromSpendingKey(spendingKey: String, birthdayHeight: BlockHeight?) {
+        val network = ZcashWalletApp.instance.defaultNetwork
+        val key = spendingKey.trim()
+        twig("Importing ${network.networkName} wallet from a spending key. Requested birthday: $birthdayHeight")
+        // Derives (and thereby validates) the extended full viewing key; throws if the key is bad.
+        val extfvk = DerivationTool.deriveViewingKey(key, network)
+        val birthday = birthdayHeight ?: loadNearestBirthday(network)
+        withContext(IO) {
+            lockBox[Const.Backup.BIRTHDAY_HEIGHT] = birthday.value.toInt()
+            lockBox[Const.Backup.SPENDING_KEY] = key
+            lockBox[Const.Backup.VIEWING_KEY] = extfvk
+            lockBox[Const.Backup.PUBLIC_KEY] = cash.z.ecc.android.ext.Keys.PLACEHOLDER_EXTPUB
+            lockBox[Const.Backup.HAS_SEED] = false
+            lockBox[Const.Backup.HAS_SEED_PHRASE] = false
+            lockBox[Const.Backup.HAS_BACKUP] = true
+        }
+        openStoredWallet()
+    }
+
     suspend fun openStoredWallet() {
         DependenciesHolder.initializerComponent.createInitializer(loadConfig())
     }

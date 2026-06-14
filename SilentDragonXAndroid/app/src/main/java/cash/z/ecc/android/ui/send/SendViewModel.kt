@@ -63,16 +63,15 @@ class SendViewModel : ViewModel() {
     fun send(): Flow<PendingTransaction> {
         funnel(SendSelected)
         val memoToSend = createMemoToSend()
-        val keys = runBlocking {
-            DerivationTool.deriveSpendingKeys(
-                lockBox.getBytes(Const.Backup.SEED)!!,
-                synchronizer.network
-            )
+        // Use the active wallet's spending key: derived from the seed for normal wallets, or the
+        // stored private key for private-key-restored wallets (identical result for seed wallets).
+        val spendingKey = runBlocking {
+            cash.z.ecc.android.ext.Keys.activeSpendingKey(synchronizer.network)
         }
         funnel(SpendingKeyFound)
         reportUserInputIssues(memoToSend)
         return synchronizer.sendToAddress(
-            keys[0],
+            spendingKey,
             zatoshiAmount!!,
             toAddress,
             memoToSend.chunked(ZcashSdk.MAX_MEMO_SIZE).firstOrNull() ?: ""

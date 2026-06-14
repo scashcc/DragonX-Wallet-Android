@@ -84,12 +84,11 @@ class ProfileViewModel : ViewModel() {
      * consolidate. See [Synchronizer.consolidate].
      */
     fun consolidate(): Flow<PendingTransaction> {
-        return lockBox.getBytes(Const.Backup.SEED)?.let {
-            val sk = runBlocking { DerivationTool.deriveSpendingKeys(it, synchronizer.network)[0] }
-            synchronizer.consolidate(sk).onEach { tx ->
-                twig("Received consolidation txUpdate: ${tx?.toString()}")
-            }
-        } ?: throw IllegalStateException("Seed was expected but it was not found!")
+        // Seed-derived for normal wallets, stored private key for private-key-restored wallets.
+        val sk = runBlocking { cash.z.ecc.android.ext.Keys.activeSpendingKey(synchronizer.network) }
+        return synchronizer.consolidate(sk).onEach { tx ->
+            twig("Received consolidation txUpdate: ${tx?.toString()}")
+        }
     }
 
     fun setEasterEggTriggered() {

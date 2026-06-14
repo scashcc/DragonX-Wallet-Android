@@ -43,6 +43,11 @@ object Const {
         const val VIEWING_KEY = "cash.z.ecc.android.VIEWING_KEY"
         const val PUBLIC_KEY = "cash.z.ecc.android.PUBLIC_KEY"
         const val BIRTHDAY_HEIGHT = "cash.z.ecc.android.BIRTHDAY_HEIGHT"
+
+        // DragonX private-key restore: when a wallet is restored from a Sapling spending key
+        // (secret-extended-key-main…) there is no seed, so the spending key is stored directly here
+        // and used for spending. See [cash.z.ecc.android.ext.Keys].
+        const val SPENDING_KEY = "cash.z.ecc.android.SPENDING_KEY"
     }
 
     /**
