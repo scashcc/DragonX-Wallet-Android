@@ -196,7 +196,7 @@ class SendFragment :
     }
 
     private fun onSubmit(unused: EditText? = null) {
-        if (sendViewModel.zatoshiAmount <= 0L) {
+        if ((sendViewModel.zatoshiAmount?.value ?: 0L) <= 0L) {
             // DragonX address-first flow: if the amount hasn't been set yet, prompt for it (the same
             // dialog as tapping the amount) instead of failing validation with a confusing error.
             promptAmount()
@@ -243,11 +243,12 @@ class SendFragment :
             .setView(input)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val zats = input.text.toString().toBigDecimalOrNull()
-                    ?.multiply(java.math.BigDecimal(100_000_000))
+                    ?.movePointRight(8) // ZEC -> zatoshi (8 decimals)
                     ?.toLong()
                     ?.coerceAtLeast(0L) ?: 0L
-                sendViewModel.zatoshiAmount = zats
-                binding.textSendAmount.text = "\$${WalletZecFormmatter.toZecStringFull(zats)}"
+                sendViewModel.zatoshiAmount = cash.z.ecc.android.sdk.model.Zatoshi(zats)
+                binding.textSendAmount.text =
+                    "\$${WalletZecFormmatter.toZecStringFull(sendViewModel.zatoshiAmount)}"
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
