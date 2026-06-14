@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import cash.z.ecc.android.ext.BackgroundSyncManager
 import cash.z.ecc.android.di.DependenciesHolder
 import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.ui.MainActivity
