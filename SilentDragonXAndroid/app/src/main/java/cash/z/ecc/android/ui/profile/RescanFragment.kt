@@ -76,7 +76,7 @@ class RescanFragment : androidx.fragment.app.Fragment() {
                 Toast.makeText(ZcashWalletApp.instance, "正在完整重扫…", Toast.LENGTH_LONG).show()
                 (activity as? MainActivity)?.navController?.popBackStack()
             } catch (t: Throwable) {
-                (activity as? MainActivity)?.showCriticalMessage("完整重扫失败", t.message ?: t.toString())
+                onRescanError(t, "完整重扫失败")
             }
         }
     }
@@ -88,7 +88,7 @@ class RescanFragment : androidx.fragment.app.Fragment() {
                 Toast.makeText(ZcashWalletApp.instance, "正在快速重扫…", Toast.LENGTH_LONG).show()
                 (activity as? MainActivity)?.navController?.popBackStack()
             } catch (t: Throwable) {
-                (activity as? MainActivity)?.showCriticalMessage("快速重扫失败", t.message ?: t.toString())
+                onRescanError(t, "快速重扫失败")
             }
         }
     }
@@ -104,6 +104,27 @@ class RescanFragment : androidx.fragment.app.Fragment() {
             DependenciesHolder.lockBox[Const.Backup.BIRTHDAY_HEIGHT] = h.toInt()
             viewModel.wipe()
             (activity as? MainActivity)?.restartApp()
+        }
+    }
+
+    /** Rewind (quick/full rescan) can't fix a corrupt ("malformed") DB — auto-escalate to wipe+resync. */
+    private fun onRescanError(t: Throwable, label: String) {
+        val act = activity as? MainActivity ?: return
+        act.runOnUiThread {
+            val msg = (t.message ?: "").lowercase(Locale.US)
+            val corrupt = msg.contains("malformed") || msg.contains("corrupt") ||
+                msg.contains("disk image") || msg.contains("not a database") || msg.contains("(code 11")
+            if (corrupt) {
+                Toast.makeText(
+                    ZcashWalletApp.instance,
+                    "本地数据已损坏，回退无效；正在清除并重新同步（助记词不受影响）…",
+                    Toast.LENGTH_LONG
+                ).show()
+                viewModel.wipe()
+                act.restartApp()
+            } else {
+                act.showCriticalMessage(label, t.message ?: t.toString())
+            }
         }
     }
 
