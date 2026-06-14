@@ -67,7 +67,12 @@ class LockBox(private val appContext: Context) : LockBoxPlugin {
         Long::class -> getChunkedString(key)?.let { it.toLongOrNull() }
         String::class -> getChunkedString(key)
         else -> throw UnsupportedOperationException("Lockbox does not yet support getting ${T::class.simpleName} objects but it can easily be added")
-    } as T
+    } as T?
+    // ^ Cast to the *nullable* T?, matching this function's declared T? return type. A missing key
+    // yields null, and `null as T?` is always safe. The previous `as T` cast to a NON-null T, so a
+    // call like `get<Int>(missingKey)` threw "null cannot be cast to non-null type kotlin.Int"
+    // BEFORE any `?: default` could apply (it crashed the whole app on wallet load when the new
+    // multi-wallet prefs WALLET_ACTIVE / WALLET_COUNT were absent for single-wallet users).
 
     /**
      * Splits a string value into smaller pieces so as not to exceed the limit on the length of

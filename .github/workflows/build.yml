@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.1.7-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.1.8-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,10 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.1.7 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.1.8 (build #${{ github.run_number }})
 
             本次更新：
+            • 【紧急修复·导入后闪退/打不开】修复 v1.1.7 导入助记词后 App 立刻闪退、之后每次打开都崩溃的严重问题。根因：上一版新增"多钱包"时，单钱包用户没有"当前钱包"这项记录，读取它时因一个类型转换 bug 直接抛异常使整个 App 崩溃（与你的资金、密钥毫无关系，币始终安全）。本版已根治。
             • 【关键修复·零钱死循环】修复"点合并显示已经很整齐、转账却提示去合并零钱"的自相矛盾。根因：转账页"可用余额"只数余额、不检查零钱的"见证(witness)"是否就绪。现在可用余额只显示真正能动用的部分；合并若发现"链上有钱但见证没同步好"，会引导一键完整重扫修复（重扫重建连续见证，是这种死循环的根治办法）。
             • 【同步体验】修复"Scanning 94% 圆圈不动像卡死"——扫描时圆圈持续转动表示仍在工作（真实进度仍显示在文字里）；同步期间顶部提示"请保持前台、勿切后台、勿锁屏，进度暂停属正常现象"。
             • 【恢复钱包】助记词改为 4 列×6 行编号网格：任意一格可单独修改，不再"删错一个、后面全串位、只能全部重输"；每格按词库自动补全；起始高度说明中文化。
@@ -142,5 +143,5 @@ jobs:
 
             矿池/多笔小额到账用户使用顺序：卸载旧版 → 装新版 → 恢复钱包 → 等同步 100% → 我的 → 合并零钱 →（若提示需要则按引导完整重扫）→ 等几分钟确认 → 正常转账。
 
-            安装：下载 **DragonX-Wallet-v1.1.7-universal.apk**（兼容所有机型）。placeholder 测试签名，需先卸载旧版再装；卸载前务必已备份 24 词助记词。
+            安装：下载 **DragonX-Wallet-v1.1.8-universal.apk**（兼容所有机型）。placeholder 测试签名，需先卸载旧版再装；卸载前务必已备份 24 词助记词。
           files: artifacts/*.apk
