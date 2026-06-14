@@ -119,10 +119,10 @@ private fun DetailRow(
     }
 }
 
-private fun confirmationStatus(minedHeight: Int, latestHeight: Long?, blockTimeInSeconds: Long): Pair<String, androidx.compose.ui.graphics.Color> {
-    if (blockTimeInSeconds <= 0L || minedHeight <= 0) return "待确认 Pending" to WarnAmber
+private fun confirmationStatus(minedHeight: Long, latestHeight: Long?, blockTimeInSeconds: Long): Pair<String, androidx.compose.ui.graphics.Color> {
+    if (blockTimeInSeconds <= 0L || minedHeight <= 0L) return "待确认 Pending" to WarnAmber
     if (latestHeight == null || latestHeight <= 0L) return "已上链 Mined" to PositiveGreen
-    val confirmations = (latestHeight - minedHeight + 1).coerceAtLeast(0)
+    val confirmations = (latestHeight - minedHeight + 1).coerceAtLeast(0L)
     return if (confirmations >= 10) "已确认 Confirmed ($confirmations)" to PositiveGreen
     else "确认中 $confirmations/10" to WarnAmber
 }
