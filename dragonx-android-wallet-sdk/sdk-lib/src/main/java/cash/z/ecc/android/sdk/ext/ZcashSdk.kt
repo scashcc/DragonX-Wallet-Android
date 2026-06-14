@@ -52,8 +52,15 @@ object ZcashSdk {
      * Default size of batches of blocks to scan via librustzcash. The smaller this number the more granular information
      * can be provided about scan state. Unfortunately, it may also lead to a lot of overhead during scanning.
      * DragonX blocks are small, so larger batches reduce JNI/FFI overhead significantly.
+     *
+     * DragonX: lowered 2500 -> 100. For a mining wallet with many small notes, witness updates make
+     * each scanned block expensive; one 2500-block batch can take many minutes, during which the
+     * "Scanning X%" UI is frozen (the % only advances when a whole batch finishes) — users read the
+     * long freeze as a hang ("卡在 90% 不动"). 100 keeps each batch short so the % moves visibly and
+     * every batch commits its scan progress (a backgrounded/killed app then loses far less work).
+     * Total scan work is essentially unchanged; this trades a little FFI overhead for live progress.
      */
-    val SCAN_BATCH_SIZE = 2500
+    val SCAN_BATCH_SIZE = 100
 
     /**
      * Default amount of time, in milliseconds, to poll for new blocks. Typically, this should be about half the average

@@ -206,6 +206,7 @@ class CompactBlockProcessor internal constructor(
                 val result = processingMutex.withLockLogged("processNewBlocks") {
                     processNewBlocks()
                 }
+                android.util.Log.i("DRGXSYNC", "cycle=$result scanned=${currentInfo.lastScannedHeight?.value} dl=${currentInfo.lastDownloadedHeight?.value} net=${currentInfo.networkBlockHeight?.value} scanRange=${currentInfo.lastScanRange} dlRange=${currentInfo.lastDownloadRange}")
                 // immediately process again after failures in order to download new blocks right away
                 when (result) {
                     BlockProcessingResult.Reconnecting -> {
@@ -758,8 +759,10 @@ class CompactBlockProcessor internal constructor(
                     // SQLite lock contention between Rust and Room connections)
                     if (!result) {
                         twig("scanBlocks returned false, retrying after 1s delay...")
+                        android.util.Log.w("DRGXSYNC", "scanBlocks returned FALSE (transient?); retrying once after 1s")
                         delay(1000)
                         result = rustBackend.scanBlocks(SCAN_BATCH_SIZE)
+                        if (!result) android.util.Log.w("DRGXSYNC", "scanBlocks FALSE again after retry — this batch aborts")
                     }
                     metrics.endBatch()
                     // Use the database as source of truth for scanned height, since the Rust
@@ -771,6 +774,7 @@ class CompactBlockProcessor internal constructor(
                         (lastScannedHeight.value - range.start.value) / (range.endInclusive.value - range.start.value + 1).toFloat() * 100.0f
                     val percent = "%.0f".format(percentValue.coerceAtMost(100f).coerceAtLeast(0f))
                     twig("batch scanned ($percent%): $lastScannedHeight/${range.endInclusive} | ${metrics.batchTime}ms, ${metrics.batchItems}blks, ${metrics.batchIps.format()}bps")
+                    android.util.Log.i("DRGXSYNC", "scan $percent% h=${lastScannedHeight.value}/${range.endInclusive.value} t=${metrics.batchTime}ms blks=${metrics.batchItems} ok=$result")
                     if (currentInfo.lastScannedHeight != lastScannedHeight) {
                         scannedNewBlocks = true
                         updateProgress(lastScannedHeight = lastScannedHeight)
@@ -978,6 +982,7 @@ class CompactBlockProcessor internal constructor(
      * and all processing should halt and stop retrying.
      */
     private fun onProcessorError(throwable: Throwable): Boolean {
+        android.util.Log.w("DRGXSYNC", "onProcessorError: $throwable")
         return onProcessorErrorListener?.invoke(throwable) ?: true
     }
 
