@@ -25,7 +25,9 @@ import cash.z.ecc.android.sdk.db.entity.ConfirmedTransaction
 @Composable
 fun HistoryScreen(
     transactions: List<ConfirmedTransaction>,
+    synced: Boolean,
     onBack: () -> Unit,
+    onTxClick: (ConfirmedTransaction) -> Unit,
 ) {
     GradientBackground {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -36,7 +38,10 @@ fun HistoryScreen(
             if (transactions.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "暂无交易记录\nNo transactions yet",
+                        // Distinguish "still syncing" from "really no transactions" so records don't
+                        // look like they vanished while the wallet is rebuilding/scanning.
+                        if (synced) "暂无交易记录\nNo transactions yet"
+                        else "同步中，交易记录会在扫描完成后显示…\nSyncing…",
                         color = TextDim,
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center,
@@ -49,7 +54,12 @@ fun HistoryScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(transactions) { tx ->
-                        Surface(shape = RoundedCornerShape(16.dp), color = SurfaceCard, modifier = Modifier.fillMaxWidth()) {
+                        Surface(
+                            onClick = { onTxClick(tx) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = SurfaceCard,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
                             TxRow(tx)
                         }
                     }

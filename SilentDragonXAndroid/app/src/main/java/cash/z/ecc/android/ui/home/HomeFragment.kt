@@ -102,7 +102,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
                 mainActivity?.safeNavigate(R.id.action_nav_home_to_create_wallet)
             } else {
                 twig("Previous wallet found. Re-opening it.")
-                mainActivity?.setLoading(true)
+                // No full-screen "Loading…" overlay: the Compose home renders immediately and shows
+                // its own sync status (连接中 / 扫描中 X%) instead of a bare blocking spinner.
                 try {
                     walletSetup.openStoredWallet()
                     mainActivity?.startSync()

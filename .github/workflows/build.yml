@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.3.3-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.3.4-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,12 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.3.3 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.3.4 (build #${{ github.run_number }})
 
             【本次更新】
+            • 去掉卡住的「Loading…」遮罩：首页直接显示真实同步状态（连接中/扫描中 X% · 已扫 X/Y 块）。
+            • 新增交易详情页（Compose）：交易记录点任一条即可看金额/确认数/时间/备注/交易ID（可复制）。
+            • 修「交易点击像消失」：同步未完成时历史页显示「同步中，稍后显示」，不再误以为记录没了（根治办法仍是同步到100%后用「合并零钱」减少碎零钱、让同步变快）。
             • 闪退自愈：本地区块/交易数据库损坏（进程被杀等导致）时，App 在任意页面自动「清除区块数据并重启重新同步」，不再直接闪退；助记词/密钥不受影响、无需重装。
             • 降低内存不足闪退：开启 largeHeap（给重钱包更大内存），缓解零钱很多时的 OOM。
             • 扫描进度改为真实区块数：首页同步状态显示「已扫 X / 共 Y 块 + 百分比」，可看到实际扫到哪、是否在前进。

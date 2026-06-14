@@ -7,7 +7,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class MainViewModel : ViewModel() {
-    private val _loadingMessage = MutableStateFlow<String?>("\u23F3 Loading...")
+    // Start with no full-screen overlay: the Compose home shows its own sync state (\u8FDE\u63A5\u4E2D/\u626B\u63CF\u4E2D\u2026),
+    // so a bare "Loading..." no longer lingers over a heavy wallet's slow startup.
+    private val _loadingMessage = MutableStateFlow<String?>(null)
     private val _syncReady = MutableStateFlow(false)
     val syncRestarted = MutableStateFlow(false)
     val loadingMessage: StateFlow<String?> get() = _loadingMessage
