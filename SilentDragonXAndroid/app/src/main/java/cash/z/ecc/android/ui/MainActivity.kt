@@ -222,18 +222,37 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
 
     fun startSync(isRestart: Boolean = false) {
         twig("MainActivity.startSync")
-        if (!syncStarted || isRestart) {
-            syncStarted = true
-            mainViewModel.setLoading(true)
-            feedback.report(SYNC_START)
-            DependenciesHolder.synchronizer.let { synchronizer ->
-                synchronizer.onProcessorErrorHandler = ::onProcessorError
-                synchronizer.onChainErrorHandler = ::onChainError
-                synchronizer.onCriticalErrorHandler = ::onCriticalError
-                (synchronizer as SdkSynchronizer).processor.onScanMetricCompleteListener =
-                    ::onScanMetricComplete
+        DependenciesHolder.synchronizer.let { synchronizer ->
+            // Always (re)wire the callbacks to THIS Activity instance. After a configuration
+            // change (rotation, dark-mode toggle, etc.) the Activity is recreated while the
+            // process-singleton synchronizer keeps running, so the previous instance's handlers
+            // would be stale and point at a dead Activity.
+            synchronizer.onProcessorErrorHandler = ::onProcessorError
+            synchronizer.onChainErrorHandler = ::onChainError
+            synchronizer.onCriticalErrorHandler = ::onCriticalError
+            (synchronizer as SdkSynchronizer).processor.onScanMetricCompleteListener =
+                ::onScanMetricComplete
 
-                synchronizer.start(lifecycleScope)
+            if (synchronizer.isStarted && !isRestart) {
+                // The synchronizer is already running. This happens when the Activity is recreated
+                // by a configuration change DURING a long sync: `syncStarted` is a fresh-instance
+                // field (false again) but the synchronizer singleton is still started. Calling
+                // start() again throws SynchronizerException.FalseStart and crashed the whole app —
+                // during the slow tail of a heavy scan this looked like "stuck near 90%, then the
+                // wallet dies and restarts over and over, never finishing". Just re-bind instead.
+                twig("Synchronizer already started; re-binding to recreated Activity (no restart)")
+                syncStarted = true
+                mainViewModel.setSyncReady(true)
+            } else if (!syncStarted || isRestart) {
+                syncStarted = true
+                mainViewModel.setLoading(true)
+                feedback.report(SYNC_START)
+                try {
+                    synchronizer.start(lifecycleScope)
+                } catch (e: cash.z.ecc.android.sdk.exception.SynchronizerException.FalseStart) {
+                    // Defensive: a race left it already started. Never crash here — just continue.
+                    twig("start() found an already-started synchronizer; continuing without restart")
+                }
                 mainViewModel.setSyncReady(true)
 
                 // When restarting (e.g. after server switch), the HomeFragment's
@@ -241,9 +260,9 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
                 if (isRestart) {
                     mainViewModel.syncRestarted.value = true
                 }
+            } else {
+                twig("Ignoring request to start sync because sync has already been started!")
             }
-        } else {
-            twig("Ignoring request to start sync because sync has already been started!")
         }
         mainViewModel.setLoading(false)
         twig("MainActivity.startSync COMPLETE")
