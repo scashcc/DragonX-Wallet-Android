@@ -25,6 +25,12 @@ class HomeViewModel : ViewModel() {
 
     lateinit var uiModels: Flow<UiModel>
 
+    /**
+     * Latest UiModel, exposed as state for the Compose home screen. The Fragment collects [uiModels]
+     * and pushes each emission here; the Compose screen observes it via collectAsState().
+     */
+    val homeState = MutableStateFlow<UiModel?>(null)
+
     lateinit var _typedChars: ConflatedBroadcastChannel<Char>
 
     var initialized = false

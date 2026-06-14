@@ -34,6 +34,9 @@
             android:id="@+id/action_nav_home_to_nav_profile"
             app:destination="@id/nav_profile" />
         <action
+            android:id="@+id/action_nav_home_to_nav_consolidate"
+            app:destination="@id/nav_consolidate" />
+        <action
             android:id="@+id/action_nav_home_to_nav_balance_detail"
             app:destination="@id/nav_balance_detail" />
         <action
