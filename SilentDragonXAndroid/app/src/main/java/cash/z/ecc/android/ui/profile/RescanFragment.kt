@@ -11,7 +11,6 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.ZcashWalletApp
 import cash.z.ecc.android.di.DependenciesHolder
 import cash.z.ecc.android.ext.Const
@@ -82,7 +81,11 @@ class RescanFragment : androidx.fragment.app.Fragment() {
     }
 
     private fun onQuickRescan() {
-        viewModel.viewModelScope.launch {
+        // Run on the synchronizer's own (process-Main) scope, NOT viewModelScope: popping back to
+        // the previous screen destroys this Fragment and clears its ViewModel, which would cancel the
+        // rewind if it were still running on viewModelScope. This matches onFullRescan and guarantees
+        // the rewind finishes even if the user navigates away mid-rescan.
+        (viewModel.synchronizer as SdkSynchronizer).coroutineScope.launch {
             try {
                 viewModel.quickRescan()
                 Toast.makeText(ZcashWalletApp.instance, "正在快速重扫…", Toast.LENGTH_LONG).show()

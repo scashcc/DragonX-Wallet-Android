@@ -51,6 +51,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
 
     private val recentTxState = MutableStateFlow<List<ConfirmedTransaction>>(emptyList())
     private var recentTxJob: Job? = null
+    private var uiModelsJob: Job? = null
+    private var statusJob: Job? = null
 
     // Only here to satisfy BaseFragment's abstract contract; never inflated (we use Compose instead).
     override fun inflate(inflater: LayoutInflater): FragmentHomeBinding =
@@ -141,14 +143,19 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
 
     private fun monitorUiModelChanges() {
         viewModel.initializeMaybe()
-        viewModel.uiModels
+        // Cancel any previous collectors before relaunching. monitorUiModelChanges is called again on
+        // every sync restart (e.g. server switch); without cancelling, each restart leaked another
+        // uiModels + status collector into resumedScope and could race-launch a second recentTxJob.
+        uiModelsJob?.cancel()
+        uiModelsJob = viewModel.uiModels
             .onEach { viewModel.homeState.value = it }
             .launchIn(resumedScope)
         // Only observe the recent-transactions PagedList once SYNCED. Subscribing during active
         // scanning ignites a Paging DataSource invalidation storm (ComputableFlow recomputes
         // thousands of times) that ANRs and kills the app mid-scan, losing progress. While syncing
         // the home shows its sync status instead of recent transactions.
-        DependenciesHolder.synchronizer.status
+        statusJob?.cancel()
+        statusJob = DependenciesHolder.synchronizer.status
             .onEach { status ->
                 if (status == Synchronizer.Status.SYNCED) {
                     if (recentTxJob == null) {
