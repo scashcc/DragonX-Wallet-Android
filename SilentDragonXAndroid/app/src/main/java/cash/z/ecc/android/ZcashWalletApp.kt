@@ -2,9 +2,11 @@ package cash.z.ecc.android
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import androidx.camera.camera2.Camera2Config
 import androidx.camera.core.CameraXConfig
 import cash.z.ecc.android.di.DependenciesHolder
+import cash.z.ecc.android.sdk.Initializer
 import cash.z.ecc.android.ext.tryWithWarning
 import cash.z.ecc.android.feedback.FeedbackCoordinator
 import cash.z.ecc.android.sdk.model.Zatoshi
@@ -94,6 +96,17 @@ class ZcashWalletApp : Application(), CameraXConfig.Provider {
         Thread.UncaughtExceptionHandler {
         override fun uncaughtException(t: Thread?, e: Throwable?) {
             twig("Uncaught Exception: $e caused by: ${e?.cause}")
+
+            // A corrupt block/data database ("database disk image is malformed") can be thrown from
+            // any path that touches it (the transactions paging query, the scanner, etc.). It cannot
+            // be fixed by retrying; the cure is to wipe the (re-downloadable) block data and resync.
+            // The seed/keys live in separate secure storage and are NOT touched. We do this from the
+            // global handler so corruption is recovered no matter which thread/coroutine hit it
+            // (MainActivity only covers the scan loop). A short cooldown prevents a restart loop.
+            if (isBlockDbCorruption(e) && recoverFromBlockDbCorruption()) {
+                return // recoverFromBlockDbCorruption() restarts the process; never reached normally
+            }
+
             // Things can get pretty crazy during a fatal exception
             // so be cautious here to avoid freezing the app
             tryWithWarning("Unable to report fatal crash") {
@@ -117,6 +130,51 @@ class ZcashWalletApp : Application(), CameraXConfig.Provider {
                 // rather than another tryWithWarning block
                 ogHandler.uncaughtException(t, e)
                 Thread.sleep(2000L)
+            }
+        }
+
+        private fun isBlockDbCorruption(error: Throwable?): Boolean {
+            var c: Throwable? = error
+            var depth = 0
+            while (c != null && depth < 15) {
+                if (c is android.database.sqlite.SQLiteDatabaseCorruptException) return true
+                val msg = (c.message ?: "").lowercase(java.util.Locale.US)
+                if (msg.contains("malformed") ||
+                    msg.contains("sqlite_corrupt") ||
+                    msg.contains("database disk image") ||
+                    msg.contains("file is not a database") ||
+                    msg.contains("(code 11")
+                ) {
+                    return true
+                }
+                c = c.cause
+                depth++
+            }
+            return false
+        }
+
+        /** Erase the (re-downloadable) block data and restart. @return true if recovery started. */
+        private fun recoverFromBlockDbCorruption(): Boolean {
+            val app = this@ZcashWalletApp
+            return try {
+                val prefs = app.getSharedPreferences("dragonx_recovery", Context.MODE_PRIVATE)
+                val now = System.currentTimeMillis()
+                if (now - prefs.getLong("last_auto_recovery_ms", 0L) < 120_000L) {
+                    twig("Global DB-corruption recovery skipped (cooldown); letting it crash normally.")
+                    return false
+                }
+                prefs.edit().putLong("last_auto_recovery_ms", now).apply()
+                twig("Global handler: block DB corrupt -> erasing block data and restarting (keys kept).")
+                runCatching { Initializer.erase(app, app.defaultNetwork) }
+                    .onFailure { twig("Global recovery: erase failed: $it") }
+                app.packageManager.getLaunchIntentForPackage(app.packageName)?.component?.let {
+                    app.startActivity(Intent.makeRestartActivityTask(it))
+                }
+                Runtime.getRuntime().exit(0)
+                true
+            } catch (t: Throwable) {
+                twig("Global recovery failed: $t")
+                false
             }
         }
     }

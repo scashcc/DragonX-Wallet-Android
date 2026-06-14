@@ -171,10 +171,19 @@ private fun BalanceCard(
                     trackColor = SurfaceCard2,
                 )
                 Spacer(Modifier.height(8.dp))
+                val scanned = state.lastScannedBlockHeight
+                val tip = state.networkHeight
                 Text(
-                    "$statusLabel ${state.overallProgress}% · 同步期间请保持前台、勿锁屏",
-                    color = TextDim,
+                    "$statusLabel ${state.overallProgress}%" +
+                        if (tip > 0L) "  ·  已扫 ${fmtBlocks(scanned)} / ${fmtBlocks(tip)} 块" else "",
+                    color = TextSecondary,
                     fontSize = 12.sp,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "同步期间请保持前台、勿锁屏，进度暂停属正常",
+                    color = TextDim,
+                    fontSize = 11.sp,
                 )
             }
         }
@@ -201,6 +210,8 @@ private fun RecentEntryCard(onHistory: () -> Unit) {
         }
     }
 }
+
+private fun fmtBlocks(v: Long): String = String.format(java.util.Locale.US, "%,d", v)
 
 private fun statusOf(status: Synchronizer.Status, synced: Boolean): Pair<String, androidx.compose.ui.graphics.Color> {
     if (synced) return "已同步" to PositiveGreen
