@@ -60,6 +60,10 @@ class SendFragment :
             onSubmit().also { tapped(SEND_SUBMIT) }
         }
 
+        // DragonX: tap the amount at the top to set/change it here, so you can enter the address
+        // first and the amount second (instead of being forced to type the amount before sending).
+        binding.textSendAmount.setOnClickListener { promptAmount() }
+
         binding.checkIncludeAddress.setOnCheckedChangeListener { _, _ ->
             onIncludeMemo(binding.checkIncludeAddress.isChecked)
         }
@@ -192,6 +196,12 @@ class SendFragment :
     }
 
     private fun onSubmit(unused: EditText? = null) {
+        if (sendViewModel.zatoshiAmount <= 0L) {
+            // DragonX address-first flow: if the amount hasn't been set yet, prompt for it (the same
+            // dialog as tapping the amount) instead of failing validation with a confusing error.
+            promptAmount()
+            return
+        }
         sendViewModel.toAddress = binding.inputZcashAddress.text.toString()
         sendViewModel.validate(requireContext(), availableZatoshi, maxZatoshi)
             .onFirstWith(resumedScope) { errorMessage ->
@@ -215,6 +225,32 @@ class SendFragment :
                     }
                 }
             }
+    }
+
+    /**
+     * DragonX: lets the user set the send amount on the address screen (address-first flow). Avoids
+     * relying on the SDK ext conversions; ZEC -> zatoshi is simply value * 1e8.
+     */
+    private fun promptAmount() {
+        val input = android.widget.EditText(requireContext()).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or
+                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(WalletZecFormmatter.toZecStringFull(sendViewModel.zatoshiAmount))
+            setSelectAllOnFocus(true)
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
+            .setTitle("输入金额 Amount (DRGX)")
+            .setView(input)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val zats = input.text.toString().toBigDecimalOrNull()
+                    ?.multiply(java.math.BigDecimal(100_000_000))
+                    ?.toLong()
+                    ?.coerceAtLeast(0L) ?: 0L
+                sendViewModel.zatoshiAmount = zats
+                binding.textSendAmount.text = "\$${WalletZecFormmatter.toZecStringFull(zats)}"
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun onMax() {

@@ -309,7 +309,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
                 }"
             )
         }
-        binding.buttonSendAmount.disabledIf(amount == "0")
+        // DragonX: do NOT disable Send just because the amount is still 0. The button is already
+        // governed by sync/funds (setSendEnabled). Allowing a tap at amount 0 lets the user enter
+        // the recipient address first and set the amount on the Send screen ("address-first" flow).
     }
 
     fun setAvailable(
