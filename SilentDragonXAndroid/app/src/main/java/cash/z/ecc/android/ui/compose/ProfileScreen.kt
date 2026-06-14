@@ -24,6 +24,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -41,6 +43,8 @@ fun ProfileScreen(
     walletLabel: String,
     address: String,
     version: String,
+    backgroundSyncEnabled: Boolean,
+    onToggleBackgroundSync: (Boolean) -> Unit,
     onBack: () -> Unit,
     onSwitchWallet: () -> Unit,
     onBackup: () -> Unit,
@@ -88,6 +92,19 @@ fun ProfileScreen(
                 SettingsRow(Icons.Filled.Refresh, "重扫钱包", "同步异常时从链上重建", onRescan)
             }
 
+            Spacer(Modifier.height(18.dp))
+            GroupTitle("后台 Background")
+            SettingsCard {
+                SettingsToggleRow(
+                    icon = Icons.Filled.Refresh,
+                    title = "后台同步",
+                    subtitle = "常驻通知保持后台同步，防止系统杀进程导致区块库损坏。" +
+                        "小米/华为等需在系统里给本应用开「自启动」并关闭「省电策略」。",
+                    checked = backgroundSyncEnabled,
+                    onChange = onToggleBackgroundSync,
+                )
+            }
+
             Spacer(Modifier.height(26.dp))
             Text(
                 "DragonX Wallet v$version",
@@ -127,6 +144,45 @@ private fun RowDivider() {
             .height(1.dp)
             .background(StrokeSubtle),
     )
+}
+
+@Composable
+private fun SettingsToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Surface(color = SurfaceCard, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(SurfaceCard2),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = DragonXGreen, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                if (subtitle != null) {
+                    Text(subtitle, color = TextDim, fontSize = 12.sp)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = checked,
+                onCheckedChange = onChange,
+                colors = SwitchDefaults.colors(checkedTrackColor = DragonXGreen),
+            )
+        }
+    }
 }
 
 @Composable

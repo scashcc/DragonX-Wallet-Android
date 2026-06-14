@@ -265,6 +265,9 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
             }
         }
         mainViewModel.setLoading(false)
+        // Keep syncing in the background (unless the user turned it off): a foreground service pins
+        // the process so the OS can't kill it mid-write (which corrupts the block DB).
+        cash.z.ecc.android.ext.BackgroundSyncManager.startIfEnabled(this)
         twig("MainActivity.startSync COMPLETE")
     }
 

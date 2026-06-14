@@ -39,6 +39,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
     private val viewModel: ProfileViewModel by viewModels()
     private val addressState = MutableStateFlow("…")
     private val labelState = MutableStateFlow("钱包 1 Wallet 1")
+    private val bgSyncState = MutableStateFlow(true)
 
     // Only to satisfy BaseFragment's abstract contract; never inflated (we render Compose instead).
     override fun inflate(inflater: LayoutInflater): FragmentProfileBinding =
@@ -49,15 +50,26 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View = ComposeView(requireContext()).apply {
+        bgSyncState.value = BackgroundSyncManager.isEnabled()
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {
             val addr by addressState.collectAsState()
             val label by labelState.collectAsState()
+            val bgSync by bgSyncState.collectAsState()
             DragonXTheme {
                 ProfileScreen(
                     walletLabel = label,
                     address = addr,
                     version = BuildConfig.VERSION_NAME,
+                    backgroundSyncEnabled = bgSync,
+                    onToggleBackgroundSync = { enabled ->
+                        BackgroundSyncManager.setEnabled(requireContext(), enabled)
+                        bgSyncState.value = enabled
+                        mainActivity?.showSnackbar(
+                            if (enabled) "已开启后台同步（常驻通知）"
+                            else "已关闭后台同步"
+                        )
+                    },
                     onBack = { mainActivity?.navController?.popBackStack() },
                     onSwitchWallet = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_wallets) },
                     onBackup = { gatedNavigate(R.id.action_nav_profile_to_nav_backup) },
