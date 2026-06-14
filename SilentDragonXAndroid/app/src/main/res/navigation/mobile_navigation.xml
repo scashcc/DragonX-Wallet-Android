@@ -107,6 +107,12 @@
         <action
             android:id="@+id/action_nav_profile_to_nav_node"
             app:destination="@id/nav_node" />
+        <action
+            android:id="@+id/action_nav_profile_to_nav_wallets"
+            app:destination="@id/nav_wallets" />
+        <action
+            android:id="@+id/action_nav_profile_to_nav_rescan"
+            app:destination="@id/nav_rescan" />
     </fragment>
     <fragment
         android:id="@+id/nav_feedback"
@@ -314,6 +320,14 @@
     <fragment
         android:id="@+id/nav_node"
         android:name="cash.z.ecc.android.ui.node.NodeFragment" />
+
+    <fragment
+        android:id="@+id/nav_wallets"
+        android:name="cash.z.ecc.android.ui.profile.WalletManagerFragment" />
+
+    <fragment
+        android:id="@+id/nav_rescan"
+        android:name="cash.z.ecc.android.ui.profile.RescanFragment" />
 
     <fragment
         android:id="@+id/nav_restore"

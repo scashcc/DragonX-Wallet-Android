@@ -59,12 +59,12 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                     address = addr,
                     version = BuildConfig.VERSION_NAME,
                     onBack = { mainActivity?.navController?.popBackStack() },
-                    onSwitchWallet = { onWalletManager() },
+                    onSwitchWallet = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_wallets) },
                     onBackup = { gatedNavigate(R.id.action_nav_profile_to_nav_backup) },
                     onExportKeys = { gatedNavigate(R.id.action_nav_profile_to_nav_export_keys) },
                     onChooseNode = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_node) },
                     onConsolidate = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_consolidate) },
-                    onRescan = { onRescanWallet() },
+                    onRescan = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_rescan) },
                 )
             }
         }
