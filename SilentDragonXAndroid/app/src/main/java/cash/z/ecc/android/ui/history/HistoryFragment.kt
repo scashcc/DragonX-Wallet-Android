@@ -19,7 +19,10 @@ import cash.z.ecc.android.sdk.ext.collectWith
 import cash.z.ecc.android.ui.base.BaseFragment
 import cash.z.ecc.android.ui.compose.DragonXTheme
 import cash.z.ecc.android.ui.compose.HistoryScreen
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 /**
  * Transaction history, rendered with Compose ([HistoryScreen]). Observes the cleared transactions
@@ -32,6 +35,7 @@ class HistoryFragment : BaseFragment<FragmentHistoryBinding>() {
     private val viewModel: HistoryViewModel by activityViewModels()
     private val txState = MutableStateFlow<List<ConfirmedTransaction>>(emptyList())
     private val syncedState = MutableStateFlow(false)
+    private var txJob: Job? = null
 
     // Only to satisfy BaseFragment's abstract contract; never inflated (we render Compose instead).
     override fun inflate(inflater: LayoutInflater): FragmentHistoryBinding =
@@ -62,10 +66,33 @@ class HistoryFragment : BaseFragment<FragmentHistoryBinding>() {
 
     override fun onResume() {
         super.onResume()
-        // filterNotNull guards against PagedList placeholder nulls.
-        viewModel.transactions.collectWith(resumedScope) { txState.value = it.filterNotNull() }
-        DependenciesHolder.synchronizer.status.collectWith(resumedScope) {
-            syncedState.value = it == Synchronizer.Status.SYNCED
+        // Only subscribe to the transaction PagedList once SYNCED. Subscribing while the scanner is
+        // actively writing every batch ignites a Paging DataSource invalidation storm (the
+        // ComputableFlow recomputes thousands of times -> "adding an invalidated callback" x1000s),
+        // which ANRs and gets the app killed mid-scan, losing sync progress. When synced the scanner
+        // is idle/polling, so the list is stable and safe to show. While syncing we show the
+        // "同步中，完成后显示" empty state instead.
+        DependenciesHolder.synchronizer.status.collectWith(resumedScope) { status ->
+            val synced = status == Synchronizer.Status.SYNCED
+            syncedState.value = synced
+            if (synced) {
+                if (txJob == null) {
+                    // filterNotNull guards against PagedList placeholder nulls.
+                    txJob = viewModel.transactions
+                        .onEach { txState.value = it.filterNotNull() }
+                        .launchIn(resumedScope)
+                }
+            } else {
+                txJob?.cancel()
+                txJob = null
+                txState.value = emptyList()
+            }
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        txJob?.cancel()
+        txJob = null
     }
 }

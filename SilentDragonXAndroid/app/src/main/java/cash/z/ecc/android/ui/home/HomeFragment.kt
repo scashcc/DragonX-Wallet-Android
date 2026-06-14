@@ -20,6 +20,7 @@ import cash.z.ecc.android.ext.Const
 import cash.z.ecc.android.ext.WalletManager
 import cash.z.ecc.android.ext.showSharedLibraryCriticalError
 import cash.z.ecc.android.feedback.Report
+import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.db.entity.ConfirmedTransaction
 import cash.z.ecc.android.sdk.ext.onFirstWith
 import cash.z.ecc.android.ui.base.BaseFragment
@@ -28,6 +29,7 @@ import cash.z.ecc.android.ui.compose.HomeScreen
 import cash.z.ecc.android.ui.setup.WalletSetupViewModel
 import cash.z.ecc.android.ui.setup.WalletSetupViewModel.WalletSetupState.NO_SEED
 import cash.z.ecc.android.util.twig
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
@@ -48,6 +50,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
     private val viewModel: HomeViewModel by viewModels()
 
     private val recentTxState = MutableStateFlow<List<ConfirmedTransaction>>(emptyList())
+    private var recentTxJob: Job? = null
 
     // Only here to satisfy BaseFragment's abstract contract; never inflated (we use Compose instead).
     override fun inflate(inflater: LayoutInflater): FragmentHomeBinding =
@@ -141,8 +144,24 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         viewModel.uiModels
             .onEach { viewModel.homeState.value = it }
             .launchIn(resumedScope)
-        DependenciesHolder.synchronizer.clearedTransactions
-            .onEach { recentTxState.value = it.filterNotNull() }
+        // Only observe the recent-transactions PagedList once SYNCED. Subscribing during active
+        // scanning ignites a Paging DataSource invalidation storm (ComputableFlow recomputes
+        // thousands of times) that ANRs and kills the app mid-scan, losing progress. While syncing
+        // the home shows its sync status instead of recent transactions.
+        DependenciesHolder.synchronizer.status
+            .onEach { status ->
+                if (status == Synchronizer.Status.SYNCED) {
+                    if (recentTxJob == null) {
+                        recentTxJob = DependenciesHolder.synchronizer.clearedTransactions
+                            .onEach { recentTxState.value = it.filterNotNull() }
+                            .launchIn(resumedScope)
+                    }
+                } else {
+                    recentTxJob?.cancel()
+                    recentTxJob = null
+                    recentTxState.value = emptyList()
+                }
+            }
             .launchIn(resumedScope)
     }
 }
