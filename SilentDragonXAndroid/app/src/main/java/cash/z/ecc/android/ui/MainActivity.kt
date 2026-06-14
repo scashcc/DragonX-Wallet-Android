@@ -608,17 +608,21 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
                 return true
             }
         }
-        // Handle gRPC connectivity errors (DEADLINE_EXCEEDED, UNAVAILABLE) by showing server picker
+        // Transient node/gRPC connectivity errors (DEADLINE_EXCEEDED, UNAVAILABLE): do NOT pop a
+        // blocking "Select a Server" dialog. That old dialog was non-cancelable and its only other
+        // button ("Exit") called exitProcess(0) — so a brief node hiccup (e.g. during 合并零钱) forced
+        // the user to either pick a node or have the app killed, which looked like a crash. The block
+        // processor already auto-reconnects on its own; here we just show a throttled, non-blocking
+        // hint and keep retrying. Users can switch nodes anytime via 我的 → 选择节点 (Compose picker).
         if (!notified && error is io.grpc.StatusRuntimeException) {
             val code = (error as io.grpc.StatusRuntimeException).status.code
             if (code == io.grpc.Status.Code.DEADLINE_EXCEEDED || code == io.grpc.Status.Code.UNAVAILABLE) {
-                if (dialog == null) {
-                    notified = true
+                notified = true
+                val now = System.currentTimeMillis()
+                if (now - lastNodeErrorNoticeMs > 20_000L) {
+                    lastNodeErrorNoticeMs = now
                     runOnUiThread {
-                        dialog = showServerPickerDialog { host ->
-                            dialog = null
-                            ignoredErrors = 0
-                        }
+                        showSnackbar("节点连接不稳定，正在自动重连…如长时间不动可到 我的→选择节点 手动切换")
                     }
                 }
                 return true
@@ -650,6 +654,10 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
 
     @Volatile
     private var recoveryInProgress = false
+
+    // Throttle the "node unstable" snackbar so repeated gRPC errors don't spam it.
+    @Volatile
+    private var lastNodeErrorNoticeMs = 0L
 
     /**
      * Walk the cause chain looking for a SQLite corruption signature. The block databases can

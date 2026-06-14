@@ -19,7 +19,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.*
 import java.net.InetSocketAddress
 import java.net.Socket
-import kotlin.system.exitProcess
 
 fun Context.showClearDataConfirmation(onDismiss: () -> Unit = {}, onCancel: () -> Unit = {}): Dialog {
     return MaterialAlertDialogBuilder(this)
@@ -265,15 +264,10 @@ fun Context.showServerPickerDialog(
             else "The current server is unavailable. Choose a server to connect to:"
         )
         .setView(listView)
-        .setCancelable(userInitiated)
-    if (userInitiated) {
-        builder.setNegativeButton("关闭 Close") { d, _ -> d.dismiss() }
-    } else {
-        builder.setNegativeButton("Exit") { d, _ ->
-            d.dismiss()
-            exitProcess(0)
-        }
-    }
+        // Always cancelable and never fatal: a transient node error must NOT trap the user or kill
+        // the app. Dismissing without choosing just lets the sync loop keep auto-reconnecting.
+        .setCancelable(true)
+    builder.setNegativeButton("关闭 Close") { d, _ -> d.dismiss() }
     val dialog = builder.show()
 
     // Check each server's connectivity in the background
