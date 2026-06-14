@@ -90,9 +90,16 @@ pub fn get_unspent_sapling_notes<P>(
 /// DragonX: cap the number of notes a single spend may select. The node's miner treats a
 /// shielded tx with >= 50 inputs as "large" and packs at most one such tx per block
 /// (LARGE_ZINS_THRESHOLD=50 / LARGE_ZINS_MAX=1 in dragonx/src/miner.cpp), so big-input
-/// spends stall in the mempool and expire. Staying under 50 keeps every spend a "normal"
-/// tx that miners include immediately. 45 leaves a safe margin.
-pub const MAX_TX_SPENDS: usize = 45;
+/// spends stall in the mempool and expire.
+///
+/// We cap at 6 (not 45) deliberately: on this network, a spend that uses many notes tends to
+/// stall, and a stalled spend leaves residue in the relay node's mempool that can lock the wallet
+/// (double-spend conflict) until the node restarts and rescans. By capping at 6, a spend that
+/// would need more than 6 notes can never be *built* — `select_unspent_sapling_notes` returns
+/// fewer-than-needed notes, the wallet reports InsufficientBalance, and NOTHING is submitted. The
+/// app turns that into a "consolidate first" prompt. After consolidation the user has a few large
+/// notes and ordinary spends use <= 6 inputs.
+pub const MAX_TX_SPENDS: usize = 6;
 
 pub fn select_unspent_sapling_notes<P>(
     wdb: &WalletDb<P>,

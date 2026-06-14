@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
+import cash.z.ecc.android.R
 import cash.z.ecc.android.di.DependenciesHolder
 import cash.z.ecc.android.ext.WalletZecFormmatter
 import cash.z.ecc.android.sdk.db.entity.isFailedEncoding
@@ -65,6 +66,7 @@ class SendFragment : Fragment() {
                     onBack = { (activity as? MainActivity)?.navController?.popBackStack() },
                     onSend = { address, amount, memo -> onSendTapped(address, amount, memo) },
                     onDone = { (activity as? MainActivity)?.navController?.popBackStack() },
+                    onGoConsolidate = { (activity as? MainActivity)?.safeNavigate(R.id.action_nav_send_to_nav_consolidate) },
                 )
             }
         }
@@ -111,8 +113,16 @@ class SendFragment : Fragment() {
             val flow = withContext(Dispatchers.IO) { viewModel.send() }
             flow.collect { tx ->
                 when {
-                    tx.isFailedEncoding() || tx.isFailedSubmit() ->
-                        phase.value = SendPhase.Failed(friendlyError(tx.errorMessage))
+                    tx.isFailedEncoding() || tx.isFailedSubmit() -> {
+                        val msg = tx.errorMessage
+                        // With MAX_TX_SPENDS=6, a spend needing >6 notes can't be built and fails as
+                        // InsufficientBalance before anything is submitted. Steer to consolidation.
+                        if (msg?.contains("insufficient", ignoreCase = true) == true) {
+                            phase.value = SendPhase.NeedConsolidate
+                        } else {
+                            phase.value = SendPhase.Failed(friendlyError(msg))
+                        }
+                    }
                     tx.isSubmitSuccess() ->
                         phase.value = SendPhase.Submitted
                 }

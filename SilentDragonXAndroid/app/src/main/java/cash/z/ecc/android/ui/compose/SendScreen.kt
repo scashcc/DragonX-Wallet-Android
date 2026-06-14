@@ -39,6 +39,9 @@ sealed interface SendPhase {
     data class Failed(val message: String) : SendPhase
     object Sending : SendPhase
     object Submitted : SendPhase
+
+    /** The spend would need too many small notes (>6); block it and steer to consolidation. */
+    object NeedConsolidate : SendPhase
 }
 
 @Composable
@@ -49,11 +52,42 @@ fun SendScreen(
     onBack: () -> Unit,
     onSend: (address: String, amount: String, memo: String) -> Unit,
     onDone: () -> Unit,
+    onGoConsolidate: () -> Unit,
 ) {
     when (phase) {
         is SendPhase.Sending -> SendBusy()
         is SendPhase.Submitted -> SendSubmitted(onDone)
+        is SendPhase.NeedConsolidate -> SendNeedConsolidate(onGoConsolidate, onBack)
         else -> SendForm(availableText, maxAmount, phase, onBack, onSend)
+    }
+}
+
+@Composable
+private fun SendNeedConsolidate(onGoConsolidate: () -> Unit, onBack: () -> Unit) {
+    GradientBackground {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("⚠️", fontSize = 40.sp)
+            Spacer(Modifier.height(14.dp))
+            Text("需要先合并零钱", color = TextPrimary, fontSize = 20.sp)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "这笔转账需要用到太多的碎零钱（超过 6 个 note）。直接发送很容易卡在网络里发不出去、" +
+                    "甚至导致钱包之后一直发不了。\n\n请先「合并零钱」把碎零钱并成大额，再来转账。",
+                color = TextSecondary, fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(28.dp))
+            Button(onClick = onGoConsolidate, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                Text("去合并零钱", fontSize = 16.sp)
+            }
+            Spacer(Modifier.height(12.dp))
+            androidx.compose.material3.OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                Text("返回", fontSize = 15.sp)
+            }
+        }
     }
 }
 

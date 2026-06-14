@@ -183,6 +183,9 @@
             android:id="@+id/action_nav_send_to_nav_send_final"
             app:destination="@id/nav_send_final"
             app:enterAnim="@anim/anim_fade_in"/>
+        <action
+            android:id="@+id/action_nav_send_to_nav_consolidate"
+            app:destination="@id/nav_consolidate" />
     </fragment>
 
 <!--    <fragment-->
