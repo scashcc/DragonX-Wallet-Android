@@ -104,6 +104,9 @@
         <action
             android:id="@+id/action_nav_profile_to_nav_consolidate"
             app:destination="@id/nav_consolidate" />
+        <action
+            android:id="@+id/action_nav_profile_to_nav_node"
+            app:destination="@id/nav_node" />
     </fragment>
     <fragment
         android:id="@+id/nav_feedback"
@@ -304,6 +307,10 @@
         android:id="@+id/nav_consolidate"
         android:name="cash.z.ecc.android.ui.profile.ConsolidateFragment"
         tools:layout="@layout/fragment_consolidate" />
+
+    <fragment
+        android:id="@+id/nav_node"
+        android:name="cash.z.ecc.android.ui.node.NodeFragment" />
 
     <fragment
         android:id="@+id/nav_restore"

@@ -62,7 +62,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                     onSwitchWallet = { onWalletManager() },
                     onBackup = { gatedNavigate(R.id.action_nav_profile_to_nav_backup) },
                     onExportKeys = { gatedNavigate(R.id.action_nav_profile_to_nav_export_keys) },
-                    onChooseNode = { mainActivity?.showServerPickerDialog(userInitiated = true) },
+                    onChooseNode = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_node) },
                     onConsolidate = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_consolidate) },
                     onRescan = { onRescanWallet() },
                 )
