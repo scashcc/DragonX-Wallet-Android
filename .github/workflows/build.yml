@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.4.1-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.4.2-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,10 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.4.1 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.4.2 (build #${{ github.run_number }})
 
             【本次更新】
+            • 去掉吓人的同步报错弹窗：「Incompatible Block Data / Clear & Resync」和「Scan Failure / Ignore / Retry」这类看不懂的框不再弹出——遇到同步数据不一致时自动「快速回退重扫」修复（保留历史与余额），只显示一条小提示；多次仍未果才提示你手动重扫，绝不死循环。
             • 新建/恢复钱包几乎不用再同步：内置检查点更新到接近链顶(3,068,000)，新钱包从这里起步只剩约 1000 块（原来要从 3,060,000 扫约 9000 块）。
             • 【自愈】扫描遇到「FOREIGN KEY constraint failed」(链顶小重组导致的数据不一致)时，自动「快速回退约一周重扫」修复，保留历史与余额、不再弹看不懂的报错框、也不用从头同步。
             • 【安全】转账自动防双花：单笔转账最多只用 6 个零钱(note)。若一笔需要超过 6 个，会直接终止、不向网络提交（避免在转发节点内存池留下残留、导致双花把钱包锁死发不出去），并弹出「去合并零钱」引导——先合并再转，安全又能成功。

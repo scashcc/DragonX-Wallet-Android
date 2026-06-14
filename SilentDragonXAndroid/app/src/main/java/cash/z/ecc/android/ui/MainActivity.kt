@@ -592,27 +592,20 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
                 }
             }
             is CompactBlockProcessorException.FailedScan -> {
-                if (dialog == null && !ignoreScanFailure) throttle("scanFailure", 20_000L) {
-                    notified = true
-                    runOnUiThread {
-                        dialog = showScanFailure(
-                            error,
-                            onCancel = { dialog = null },
-                            onDismiss = { dialog = null }
-                        )
-                    }
-                }
+                // Auto-recover instead of the scary "Scan Failure / Ignore / Retry" dialog: a quick
+                // rewind clears recent scan inconsistencies; persistent failures escalate to a resync
+                // (both capped against loops). The user just sees a brief "repairing" snackbar.
+                twig("FailedScan; auto quick-rewinding (no dialog).")
+                autoFkRewind()
+                return true
             }
             is CompactBlockProcessorException.FailedReorgRepair -> {
-                if (dialog == null) {
-                    notified = true
-                    runOnUiThread {
-                        dialog = showReorgRepairDialog {
-                            dialog = null
-                        }
-                    }
-                }
-                return false // stop retrying
+                // Recover automatically (clear block data + resync; keys/addresses preserved) instead
+                // of popping the scary "Incompatible Block Data / Clear & Resync?" dialog. A counter
+                // inside clearBlockDataAndRestart caps this so a deterministic error can't loop.
+                twig("FailedReorgRepair; auto clearing block data and resyncing (no dialog).")
+                clearBlockDataAndRestart()
+                return true
             }
         }
         // Handle gRPC connectivity errors (DEADLINE_EXCEEDED, UNAVAILABLE) by showing server picker
@@ -699,15 +692,25 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
         val now = System.currentTimeMillis()
         val last = recoveryPrefs.getLong("last_auto_recovery_ms", 0L)
         if (now - last < 120_000L) {
-            twig("Auto-recovery ran <2min ago; not looping. Showing manual repair dialog.")
+            twig("Auto-recovery ran <2min ago; not looping. Letting the scanner keep retrying.")
             recoveryInProgress = false
-            runOnUiThread {
-                if (dialog == null) {
-                    dialog = showReorgRepairDialog { dialog = null }
-                }
-            }
+            runOnUiThread { showSnackbar("正在修复同步数据，请稍候…（若长时间不动可到 我的→重扫钱包）") }
             return
         }
+        // Cap automatic resyncs within a 30-min window so a deterministic error can't loop forever.
+        val windowStart = recoveryPrefs.getLong("recovery_window_start_ms", 0L)
+        var recoveryCount = recoveryPrefs.getInt("recovery_count", 0)
+        if (now - windowStart > 1_800_000L) {
+            recoveryCount = 0
+            recoveryPrefs.edit().putLong("recovery_window_start_ms", now).apply()
+        }
+        if (recoveryCount >= 3) {
+            twig("Auto-recovery cap reached; not resyncing again. Hinting manual repair.")
+            recoveryInProgress = false
+            runOnUiThread { showSnackbar("自动修复多次仍未完成，请到 我的→重扫钱包→清除并重新同步 手动处理，或检查节点/网络") }
+            return
+        }
+        recoveryPrefs.edit().putInt("recovery_count", recoveryCount + 1).apply()
         recoveryPrefs.edit().putLong("last_auto_recovery_ms", now).apply()
 
         runOnUiThread {
@@ -761,7 +764,7 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
         val now = System.currentTimeMillis()
         if (now - recoveryPrefs.getLong("last_fk_rewind_ms", 0L) < 120_000L) {
             twig("FK rewind ran <2min ago; not looping. Showing manual repair dialog.")
-            runOnUiThread { if (dialog == null) dialog = showReorgRepairDialog { dialog = null } }
+            clearBlockDataAndRestart()
             return
         }
         recoveryPrefs.edit().putLong("last_fk_rewind_ms", now).apply()
@@ -781,7 +784,7 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
                 }
             } catch (t: Throwable) {
                 twig("auto FK rewind failed: $t")
-                runOnUiThread { if (dialog == null) dialog = showReorgRepairDialog { dialog = null } }
+                clearBlockDataAndRestart()
             } finally {
                 fkRewindInProgress = false
             }
