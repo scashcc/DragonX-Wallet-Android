@@ -165,7 +165,8 @@ class ZcashWalletApp : Application(), CameraXConfig.Provider {
                 }
                 prefs.edit().putLong("last_auto_recovery_ms", now).apply()
                 twig("Global handler: block DB corrupt -> erasing block data and restarting (keys kept).")
-                runCatching { Initializer.erase(app, app.defaultNetwork) }
+                // erase() is a suspend fun; the uncaught handler is not a coroutine, so block on it.
+                runCatching { runBlocking { Initializer.erase(app, app.defaultNetwork) } }
                     .onFailure { twig("Global recovery: erase failed: $it") }
                 app.packageManager.getLaunchIntentForPackage(app.packageName)?.component?.let {
                     app.startActivity(Intent.makeRestartActivityTask(it))
