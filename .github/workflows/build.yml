@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.5.1-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.5.2-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,10 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.5.1 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.5.2 (build #${{ github.run_number }})
 
             【本次更新】
+            • 【根治·最关键】修复「动不动就从头重新同步、余额一直显示 0」的死循环根因。靠 adb 拉手机同步日志实锤:扫描时 Rust 报 `UNIQUE constraint failed: sapling_witnesses.note, sapling_witnesses.block`——见证表对 (note, block) 有唯一约束,而插入用的是普通 INSERT,**任何一次回退/重扫重新扫到已扫过的块,就会插入重复见证→报错(FailedScan)→App 把整个区块库清空→从生日检查点(3,050,000)重新扫→扫到那个块又冲突→无限循环**,余额自然一直归 0。修法:见证插入改为 `INSERT OR IGNORE`(同一 note+block 的见证是确定值,重复即相同,忽略即可),扫描从此幂等、不再因重复见证崩。这是真正卡你同步的元凶。⚠️装上后让它把这一轮重扫**安安静静走完一次**(插电、别乱点、开后台同步),扫完余额就会回来。
             • 【服务器端·关键】修复了节点 lightwalletd **反复崩溃**导致手机同步被掐断的问题(这是和手机端并发损坏并列的另一个"同步老卡/老断"的独立元凶)。原因:DragonX(Hush/Komodo 系)全节点的 RPC 返回结构和 lightwalletd 期望对不齐,源码里对 RPC 字段硬强转,字段缺失(典型:**内存池里还没上链的交易没有 height 字段**)就让整个轻钱包服务器 panic 崩掉,所有连着的手机同步流瞬间全断。已把相关类型断言全部改为安全容错写法并重新编译部署,节点不再因此崩溃。(此项是服务器端修复,装不装新 App 都已生效。)
             • 【App·健壮性】首页:换节点/重启同步时会重复订阅状态流、并可能竞态多启一个最近交易订阅(轻微泄漏)——改为重订阅前先取消旧的。
             • 【App·健壮性】快速重扫:改到同步引擎自身的作用域执行,返回上一页销毁页面也不会中途取消回退,和"完整重扫"一致。

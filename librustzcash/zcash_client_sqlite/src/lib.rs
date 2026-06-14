@@ -180,7 +180,16 @@ impl<P: consensus::Parameters> WalletDb<P> {
                     VALUES (?, ?, ?, ?, ?, ?)",
                 )?,
                 stmt_insert_witness: self.conn.prepare(
-                    "INSERT INTO sapling_witnesses (note, block, witness)
+                    // OR IGNORE: scanning must be idempotent. The witness for a given (note, block)
+                    // is deterministic (the Merkle path to the tree root at that block), so re-touching
+                    // an already-scanned block — which happens after any rewind/reorg/re-scan — produces
+                    // an identical row. A plain INSERT hit the "UNIQUE (note, block)" constraint and
+                    // threw "UNIQUE constraint failed: sapling_witnesses.note, sapling_witnesses.block",
+                    // surfacing as FailedScan. The app then wiped ALL databases and re-synced from the
+                    // birthday checkpoint, only to hit the same conflict again — an endless
+                    // corrupt→wipe→rescan loop that reset the balance to 0. OR IGNORE keeps the existing
+                    // (identical) witness and lets the scan proceed.
+                    "INSERT OR IGNORE INTO sapling_witnesses (note, block, witness)
                     VALUES (?, ?, ?)",
                 )?,
                 stmt_prune_witnesses: self.conn.prepare(
