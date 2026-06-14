@@ -25,8 +25,9 @@
     <string name="consolidate_explanation">如果你收到过很多笔小额转入（例如矿池打款），钱包里会积累成百上千个“零钱”碎片。转大额时，钱包要把几百个碎片塞进一笔交易，体积过大会被矿工拒绝打包，最终超时失败。\n\n点击下方按钮，钱包会全自动把这些零钱合并成几个大额，无需你逐笔操作。合并笔数会根据你的零钱数量自动决定。完成并确认后，就能正常转出大额了。\n\nIf your wallet received many small payments, it holds hundreds of tiny notes. This automatically merges them into a few large ones so you can send normally again.</string>
     <string name="consolidate_fee_note">每合并一笔需支付网络手续费 0.0001 DRGX（DragonX 节点对隐私交易要求的最低手续费）。\nA network fee of 0.0001 DRGX applies per consolidation transaction.</string>
     <string name="consolidate_start">开始自动合并 Start</string>
-    <string name="consolidate_running">正在合并零钱，请保持应用打开、屏幕常亮…\n已提交 %1$d 笔</string>
-    <string name="consolidate_done">✅ 合并完成！共提交 %1$d 笔合并交易。\n等待区块确认（约几分钟）后，余额会重新可用，即可正常转出大额。</string>
+    <string name="consolidate_running">正在合并零钱…\n已确认 %1$d 笔 ｜ 已提交 %2$d 笔\n\n⏳ 全程请保持应用在前台、屏幕常亮、勿切后台、勿锁屏。\n💡 合并期间「可用余额」会暂时变少（已花、未确认的零钱暂不计入），确认后会自动恢复，属正常现象，请勿重复操作。</string>
+    <string name="consolidate_done">✅ 合并完成！共 %1$d 笔已确认上链。\n零钱已并成更少的大额，现在可以正常转出大额了。</string>
+    <string name="consolidate_done_partial">本轮已确认 %1$d 笔，另有 %2$d 笔未在限定区块内确认。\n可再点一次「开始合并」继续合并剩余零钱；若长期不确认，请用下方「一键完整重扫」后重试。</string>
     <string name="consolidate_none">✅ 你的零钱已经很整齐，无需合并。</string>
     <string name="consolidate_error">合并未完成：%1$s</string>
     <string name="consolidate_need_sync">请先等待钱包同步完成（进度条满）再合并零钱。Please wait until the wallet is fully synced.</string>
@@ -36,7 +37,7 @@
     <string name="consolidate_rescan_confirm">清除并完整重扫</string>
     <string name="home_sync_dont_background">⏳ 正在同步，请保持应用在前台、勿切后台、勿锁屏。进度条暂停不动多是在处理大区块，属正常现象，请耐心等待几分钟。</string>
     <string name="consolidate_confirm_title">开始合并零钱？</string>
-    <string name="consolidate_confirm_message">钱包将自动把零钱碎片合并成几个大额，全程自动进行，可能持续几分钟。期间请保持应用打开、屏幕常亮。是否开始？</string>
+    <string name="consolidate_confirm_message">钱包会把零钱碎片分批（每笔少量）合并成更少的大额，每笔都等真正上链确认后再继续，全自动进行。\n零钱越多耗时越久（可能几十分钟甚至更长），全程请保持应用在前台、屏幕常亮、勿切后台、勿锁屏，中途也不要重启钱包。是否开始？</string>
     <string name="send_final_error_fragmented">余额充足，但你的“零钱”过于分散，一次转不出这么多。请先到「我的 → 合并零钱」自动合并，再来转账。\nYour balance is enough, but it is split into too many small notes. Use “合并零钱 / Consolidate” in the Profile tab first, then send.</string>
 
     <string name="cancel">@string/missing_cancel</string>

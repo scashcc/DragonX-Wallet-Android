@@ -18,11 +18,32 @@ object ZcashSdk {
     val MINERS_FEE = Zatoshi(10_000L)
 
     /**
-     * Maximum number of input notes to sweep per consolidation round. Must stay below the node's
-     * 50-input "large transaction" threshold (LARGE_ZINS_THRESHOLD in dragonx/src/miner.cpp) so
-     * each consolidation tx is a "normal" tx that miners include immediately. 45 leaves a margin.
+     * Maximum number of input notes merged per consolidation transaction. DragonX lowered this from
+     * 45 to 8: a smaller batch keeps every consolidation tx tiny (~3-4 KB) so miners reliably
+     * include it, matching the node's own zsweep default (zsweepmaxinputs=8). It must stay well
+     * below the node's 50-input "large transaction" threshold (LARGE_ZINS_THRESHOLD in
+     * dragonx/src/miner.cpp). More, smaller batches just means more rounds — the consolidation
+     * sweep paces and repeats them automatically.
      */
-    const val MAX_CONSOLIDATION_INPUTS = 45
+    const val MAX_CONSOLIDATION_INPUTS = 8
+
+    /**
+     * Maximum number of consolidation transactions kept in flight (submitted but not yet confirmed)
+     * at once. The sweep never fire-and-forgets the whole wallet into the mempool: it keeps at most
+     * this many batches pending, waits for each to actually confirm on-chain (>=1 confirmation),
+     * then tops the queue back up. This paces submission to match the chain (mostly empty blocks
+     * with the occasional block that packs several txs) and avoids piling up unconfirmed txs that
+     * could double-spend each other or expire. Set to 1 for fully serial (most conservative).
+     */
+    const val MAX_CONSOLIDATION_INFLIGHT = 6
+
+    /**
+     * How many idle poll cycles to wait — with nothing in flight and nothing new to encode — before
+     * the consolidation sweep concludes it is finished. This bridges the gap while freshly-merged
+     * output notes mature into spendable notes, so the sweep keeps going across passes
+     * (e.g. 722 notes -> ~90 -> ~12 -> 1) in a single run instead of stopping after the first pass.
+     */
+    const val CONSOLIDATION_IDLE_GRACE_ROUNDS = 3
 
     /**
      * The theoretical maximum number of blocks in a reorg, due to other bottlenecks in the protocol design.

@@ -23,6 +23,7 @@ import cash.z.ecc.android.sdk.db.entity.isCancelled
 import cash.z.ecc.android.sdk.db.entity.isExpired
 import cash.z.ecc.android.sdk.db.entity.isFailedEncoding
 import cash.z.ecc.android.sdk.db.entity.isFailedSubmit
+import cash.z.ecc.android.sdk.db.entity.isFailure
 import cash.z.ecc.android.sdk.db.entity.isLongExpired
 import cash.z.ecc.android.sdk.db.entity.isMarkedForDeletion
 import cash.z.ecc.android.sdk.db.entity.isMined
@@ -68,6 +69,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.ConflatedBroadcastChannel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -729,41 +731,111 @@ class SdkSynchronizer internal constructor(
         spendingKey: String,
         fromAccountIndex: Int
     ): Flow<PendingTransaction> = flow {
-        twig("Initializing consolidation sweep")
+        twig(
+            "Initializing consolidation sweep (batch=${ZcashSdk.MAX_CONSOLIDATION_INPUTS}, " +
+                "inflight=${ZcashSdk.MAX_CONSOLIDATION_INFLIGHT})"
+        )
         val zAddr = getAddress(fromAccountIndex)
-        var rounds = 0
-        // Each round sweeps up to MAX_CONSOLIDATION_INPUTS of the smallest notes into one note.
-        // Because the notes spent in a round are immediately locked, the next round picks up the
-        // next batch, so the whole wallet is consolidated in one burst without waiting for
-        // confirmations. The loop ends when encodeConsolidation returns null (nothing left).
-        while (true) {
-            val placeHolderTx = txManager.initSpend(Zatoshi(0), zAddr, "", fromAccountIndex)
-            val encodedTx = txManager.encodeConsolidation(
-                spendingKey,
-                placeHolderTx,
-                ZcashSdk.MAX_CONSOLIDATION_INPUTS,
-                fromAccountIndex
-            ) ?: break // null => nothing left worth consolidating; we're done
-            if (encodedTx.isFailedEncoding()) {
-                twig("[consolidation] encoding failed at round ${rounds + 1}; stopping")
-                emit(encodedTx)
-                break
+
+        // Controlled-parallel, confirmation-aware, multi-pass consolidation.
+        //
+        // Each batch merges up to MAX_CONSOLIDATION_INPUTS of the smallest notes into one note paid
+        // back to the wallet's own address. encodeConsolidation locks (marks spent) the notes it
+        // picks immediately, so concurrent batches always select disjoint notes and never
+        // double-spend. Unlike the old "fire the whole wallet into the mempool at once" burst, we:
+        //   * keep at most MAX_CONSOLIDATION_INFLIGHT batches pending at a time, and
+        //   * wait for each pending batch to actually confirm on-chain (isMined(), i.e. >=1
+        //     confirmation read from the data DB — never the mempool) before topping the queue
+        //     back up.
+        // The background block processor keeps scanning while we run; that is what advances each
+        // pending tx's minedHeight (see refreshPendingTransactions). Because freshly-merged output
+        // notes become spendable once they confirm, topping up naturally carries the sweep across
+        // passes (e.g. 722 -> ~90 -> ~12 -> 1) until a single note remains.
+        val inflight = LinkedHashSet<Long>()
+        var confirmed = 0
+        var failed = 0
+        var idleRounds = 0
+
+        // Submit fresh batches until the in-flight queue is full or nothing is currently spendable.
+        // Returns the transactions produced this call so the flow body can emit them; emit() is kept
+        // out of this nested function because Flow forbids non-local emission.
+        suspend fun topUp(): List<PendingTransaction> {
+            val produced = mutableListOf<PendingTransaction>()
+            while (inflight.size < ZcashSdk.MAX_CONSOLIDATION_INFLIGHT) {
+                val placeHolderTx = txManager.initSpend(Zatoshi(0), zAddr, "", fromAccountIndex)
+                val encodedTx = txManager.encodeConsolidation(
+                    spendingKey,
+                    placeHolderTx,
+                    ZcashSdk.MAX_CONSOLIDATION_INPUTS,
+                    fromAccountIndex
+                ) ?: break // nothing worth consolidating right now (may change after more confirm)
+                if (encodedTx.isFailedEncoding()) {
+                    twig("[consolidation] a batch failed to encode; skipping: ${encodedTx.errorMessage}")
+                    failed++
+                    produced.add(encodedTx)
+                    break
+                }
+                val resultTx = if (encodedTx.isCancelled()) {
+                    twig("[consolidation] a batch was cancelled; cleaning up")
+                    if (cleanupCancelledTx(encodedTx)) refreshAllBalances()
+                    encodedTx
+                } else {
+                    txManager.submit(encodedTx)
+                }
+                produced.add(resultTx)
+                if (resultTx.isFailedSubmit() || resultTx.isCancelled()) {
+                    twig("[consolidation] batch ${resultTx.id} did not enter the mempool; not tracking it")
+                    failed++
+                } else {
+                    inflight.add(resultTx.id)
+                    twig("[consolidation] submitted batch ${resultTx.id}; inflight=${inflight.size}")
+                }
             }
-            rounds++
-            val resultTx = if (encodedTx.isCancelled()) {
-                twig("[consolidation] round $rounds was cancelled; cleaning up")
-                if (cleanupCancelledTx(encodedTx)) refreshAllBalances()
-                encodedTx
-            } else {
-                txManager.submit(encodedTx)
-            }
-            emit(resultTx)
-            if (resultTx.isFailedSubmit()) {
-                twig("[consolidation] submit failed at round $rounds; stopping")
-                break
-            }
+            return produced
         }
-        twig("[consolidation] finished after $rounds round(s)")
+
+        topUp().forEach { emit(it) }
+        while (true) {
+            if (inflight.isEmpty()) {
+                // Nothing pending and nothing new to encode. It may just be that freshly-merged
+                // outputs have not matured into spendable notes yet, so wait a few grace cycles
+                // (re-trying topUp each time) before concluding the sweep is finished.
+                if (idleRounds >= ZcashSdk.CONSOLIDATION_IDLE_GRACE_ROUNDS) break
+                idleRounds++
+                delay(ZcashSdk.POLL_INTERVAL)
+                topUp().forEach { emit(it) }
+                continue
+            }
+            idleRounds = 0
+
+            // Let the chain advance, then settle whatever confirmed / failed / expired.
+            delay(ZcashSdk.POLL_INTERVAL)
+            val height = latestHeight
+            val settled = mutableListOf<Long>()
+            for (id in inflight) {
+                val tx = txManager.findById(id)
+                when {
+                    tx == null -> settled.add(id)
+                    tx.isMined() -> {
+                        confirmed++
+                        settled.add(id)
+                        emit(tx)
+                        twig("[consolidation] batch $id confirmed at height ${tx.minedHeight} (confirmed=$confirmed)")
+                    }
+                    tx.isFailure() || tx.isExpired(height, network.saplingActivationHeight) -> {
+                        failed++
+                        settled.add(id)
+                        emit(tx)
+                        twig("[consolidation] batch $id failed/expired; cleanup + rescan will recover its notes")
+                    }
+                }
+            }
+            inflight.removeAll(settled.toSet())
+            // Refill freed slots (and pick up newly-matured merged outputs for the next pass).
+            topUp().forEach { emit(it) }
+        }
+
+        twig("[consolidation] finished: $confirmed confirmed, $failed failed/expired")
         refreshAllBalances()
     }
 
