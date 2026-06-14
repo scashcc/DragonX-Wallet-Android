@@ -20,9 +20,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.sample
 
 /**
  * Foreground service that keeps the wallet syncing while the app is in the background.
@@ -71,9 +71,11 @@ class SyncForegroundService : Service() {
     private fun observeSync() {
         observeJob?.cancel()
         val sync = runCatching { DependenciesHolder.synchronizer }.getOrNull() ?: return
-        observeJob = combine(sync.status, sync.progress) { status, progress -> status to progress }
-            .sample(1500) // avoid hammering the notification on every batch
-            .onEach { (status, progress) -> updateNotification(statusText(status, progress)) }
+        // Map to the display text and only re-post the notification when that text actually changes
+        // (distinctUntilChanged is stable; avoids hammering the notification on every scanned batch).
+        observeJob = combine(sync.status, sync.progress) { status, progress -> statusText(status, progress) }
+            .distinctUntilChanged()
+            .onEach { text -> updateNotification(text) }
             .launchIn(scope)
     }
 
