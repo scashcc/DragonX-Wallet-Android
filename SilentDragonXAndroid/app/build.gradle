@@ -104,6 +104,11 @@ android {
         jvmTarget = "1.8"
         freeCompilerArgs += "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi"
         freeCompilerArgs += "-opt-in=kotlin.time.ExperimentalTime"
+        // Jetpack Compose: many Material3 1.0.x APIs (clickable Surface, TopAppBar, Scaffold, ...)
+        // are still annotated @ExperimentalMaterial3Api. Opt in project-wide so the Compose UI
+        // compiles without per-call-site @OptIn annotations.
+        freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        freeCompilerArgs += "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi"
 //        freeCompilerArgs += "-Xopt-in=kotlinx.coroutines.ObsoleteCoroutinesApi"
 //        freeCompilerArgs += "-Xopt-in=kotlinx.coroutines.FlowPreview"
     }
