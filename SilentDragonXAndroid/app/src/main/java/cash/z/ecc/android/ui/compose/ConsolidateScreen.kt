@@ -39,6 +39,8 @@ sealed interface ConsolidateUiState {
     object Nothing : ConsolidateUiState
     object NeedsRescan : ConsolidateUiState
     data class Error(val message: String) : ConsolidateUiState
+    /** A previous sweep was interrupted by the app being closed/killed; it can be safely resumed. */
+    object Interrupted : ConsolidateUiState
 }
 
 @Composable
@@ -76,7 +78,9 @@ fun ConsolidateScreen(
                     Text(
                         "• 全程只转给你自己，资金不会离开钱包\n" +
                             "• 合并期间可用余额暂时变少属正常，确认后会回来\n" +
-                            "• 请保持 App 在前台、勿锁屏、勿中途重启",
+                            "• 开始后可切到别的页面或锁屏，合并会在后台继续\n" +
+                            "• 即使中途闪退/关掉 App，已提交的交易也不会丢、不会双花；\n" +
+                            "  重新打开本页点「继续合并」即可安全接着并完",
                         color = TextDim, fontSize = 12.sp,
                     )
                 }
@@ -91,7 +95,12 @@ fun ConsolidateScreen(
                 enabled = !running,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) {
-                Text(if (running) "合并进行中…" else "开始合并 Start", fontSize = 16.sp)
+                val label = when {
+                    running -> "合并进行中…"
+                    state is ConsolidateUiState.Interrupted -> "继续合并 Resume"
+                    else -> "开始合并 Start"
+                }
+                Text(label, fontSize = 16.sp)
             }
 
             if (state is ConsolidateUiState.NeedsRescan) {
@@ -125,7 +134,12 @@ fun ConsolidateScreen(
 private fun StatusBlock(state: ConsolidateUiState) {
     val text = when (state) {
         is ConsolidateUiState.Idle -> "点击下方按钮开始（需先完成同步）"
-        is ConsolidateUiState.Running -> "已确认 ${state.confirmed} 笔 · 已提交 ${state.submitted} 笔（等待上链…）"
+        is ConsolidateUiState.Running ->
+            "已确认 ${state.confirmed} 笔 · 已提交 ${state.submitted} 笔（等待上链…）\n" +
+                "可切到别的页面或锁屏，合并在后台继续；请尽量别关掉 App"
+        is ConsolidateUiState.Interrupted ->
+            "上次合并被中断（关掉 App/闪退）。已提交的交易和资金都不受影响。\n" +
+                "同步完成后点下方「继续合并」即可安全接着并完。"
         is ConsolidateUiState.Done ->
             if (state.confirmed >= state.submitted) "合并完成！共确认 ${state.confirmed} 笔"
             else "已确认 ${state.confirmed} 笔，另有 ${state.submitted - state.confirmed} 笔等待上链确认"

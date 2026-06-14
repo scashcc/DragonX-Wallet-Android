@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.4.7-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.4.8-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,11 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.4.7 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.4.8 (build #${{ github.run_number }})
 
             【本次更新】
+            • 【合并零钱·更稳】合并现在在后台进行，不再绑定页面：合并途中可切到别的页面、锁屏，合并都会继续；返回合并页能看到实时进度，不会从头再来。即使中途闪退/关掉 App，已提交的交易也不会丢、不会双花（每批一提交就把零钱标记为已花、写入本地，彻底防重复花）；重新打开合并页会提示「上次未完成」，点「继续合并」即可安全接着并完。
+            • 【重扫·修复误判】修复「快速/完整重扫遇到数据损坏时，有时不自动修复、反而弹出看不懂的报错框」。原因：判断"是否损坏"只看了最外层错误信息，而真正的损坏提示常被包在内层。现在改为沿整条错误链查找并识别损坏异常类型，遇到损坏一律自动「清除并重新同步」（这是唯一能修复损坏区块库的方式，助记词/资金不受影响），并给出清晰说明。
             • 【根治·重要】修复「节点出错弹窗逼你选节点、点 Exit 就闪退」。原来节点临时连接失败（如合并零钱时）会弹一个老版「Select a Server」弹窗，它不可取消、唯一的另一个按钮 Exit 会直接 exitProcess 杀掉 App——一次节点抖动就逼你「选节点 或 被杀」，看着就是闪退。现在：节点出错不再弹这个挡路弹窗，改为一条不挡操作的小提示「节点连接不稳定，正在自动重连…」（内核本就会自动重连），想换节点随时去「我的→选择节点」（新版界面）；同时把那个老弹窗本身也改成永远可取消、永不杀 App（防它别处再被调起）。
             • 【根治·重要】修复「同步时点交易记录 → App 被杀、同步进度清零重头来」。靠新加的日志文件抓到真因：同步进行中订阅交易列表会触发 Paging 列表的「失效风暴」——扫描器每扫一批就刷新一次列表，列表被反复重建数千次（日志里 adding an invalidated callback 出现 2780 次）→ 主线程卡死 ANR → 系统杀进程 → 重启后从生日高度重新同步、进度全丢。修法：同步未完成时不再订阅交易列表（首页/历史显示「同步中，完成后显示」占位），同步完成后才加载——此时扫描器空闲，列表稳定、可随便看。
             • 【根治·重要】修复「同步时点开交易记录 → 同步停住 + 区块数据损坏(malformed) → 被迫清库重扫」的并发 Bug。根因：交易列表（PagedList）默认在多线程池 Dispatchers.IO 上查询数据库，而 Rust 扫描器在单线程 DATABASE_IO 上写同一个数据库文件——两套 SQLite 同时读写同一文件 → 锁冲突卡死 + 文件写坏。修法：把交易列表三个查询（全部/收款/转账）以及内部「已扫高度」只读查询全部钉到与扫描器共享的同一根 DATABASE_IO 单线程，读写严格串行、永不并发。现在同步过程中随便点交易记录都不会再让区块库损坏或中断同步。

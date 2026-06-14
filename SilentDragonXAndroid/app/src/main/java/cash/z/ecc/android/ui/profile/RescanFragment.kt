@@ -107,17 +107,19 @@ class RescanFragment : androidx.fragment.app.Fragment() {
         }
     }
 
-    /** Rewind (quick/full rescan) can't fix a corrupt ("malformed") DB — auto-escalate to wipe+resync. */
+    /**
+     * Rewind (quick/full rescan) reads & writes the local block DB, so it CANNOT fix a corrupt
+     * ("malformed") DB — the rewind itself throws. When that happens we auto-escalate to a clean
+     * wipe+resync (the only thing that repairs corruption). Seed/funds are never touched.
+     */
     private fun onRescanError(t: Throwable, label: String) {
         val act = activity as? MainActivity ?: return
         act.runOnUiThread {
-            val msg = (t.message ?: "").lowercase(Locale.US)
-            val corrupt = msg.contains("malformed") || msg.contains("corrupt") ||
-                msg.contains("disk image") || msg.contains("not a database") || msg.contains("(code 11")
-            if (corrupt) {
+            if (isLocalDataCorrupt(t)) {
                 Toast.makeText(
                     ZcashWalletApp.instance,
-                    "本地数据已损坏，回退无效；正在清除并重新同步（助记词不受影响）…",
+                    "本地区块数据已损坏，无法快速回退。已自动改为「清除并重新同步」（从头重建，唯一能修复损坏的方式）。" +
+                        "助记词/资金不受影响，请耐心等待同步…",
                     Toast.LENGTH_LONG
                 ).show()
                 viewModel.wipe()
@@ -126,6 +128,33 @@ class RescanFragment : androidx.fragment.app.Fragment() {
                 act.showCriticalMessage(label, t.message ?: t.toString())
             }
         }
+    }
+
+    /**
+     * Walk the whole cause chain (and check the exception type), because the SQLite corruption error
+     * thrown from the Rust/JNI rewind is usually *wrapped* — the "malformed" text lives in a nested
+     * cause, not in the top-level message. The old check only looked at t.message, so a wrapped
+     * corruption slipped through to a scary critical-error dialog instead of auto-rebuilding.
+     */
+    private fun isLocalDataCorrupt(error: Throwable): Boolean {
+        var c: Throwable? = error
+        var depth = 0
+        while (c != null && depth < 15) {
+            if (c is android.database.sqlite.SQLiteDatabaseCorruptException) return true
+            val m = (c.message ?: "").lowercase(Locale.US)
+            if (m.contains("malformed") ||
+                m.contains("corrupt") ||
+                m.contains("disk image") ||
+                m.contains("not a database") ||
+                m.contains("sqlite_corrupt") ||
+                m.contains("(code 11")
+            ) {
+                return true
+            }
+            c = c.cause
+            depth++
+        }
+        return false
     }
 
     private fun onWipe() {
