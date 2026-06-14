@@ -466,21 +466,36 @@ class CompactBlockProcessor internal constructor(
             repository.getAccountCount() == 0 -> CompactBlockProcessorException.NoAccount
             else -> {
                 // verify that the server is correct
-                downloader.getServerInfo().let { info ->
-                    val clientBranch = "76b809bb"
-                    val network = rustBackend.network.networkName
-                    when {
-                        !info.matchingNetwork(network) -> MismatchedNetwork(
-                            clientNetwork = network,
-                            serverNetwork = info.chainName
-                        )
-                        !info.matchingConsensusBranchId(clientBranch) -> MismatchedBranch(
-                            clientBranch = clientBranch,
-                            serverBranch = info.consensusBranchId,
-                            networkName = network
-                        )
-                        else -> null
+                try {
+                    downloader.getServerInfo().let { info ->
+                        val clientBranch = "76b809bb"
+                        val network = rustBackend.network.networkName
+                        when {
+                            !info.matchingNetwork(network) -> MismatchedNetwork(
+                                clientNetwork = network,
+                                serverNetwork = info.chainName
+                            )
+                            !info.matchingConsensusBranchId(clientBranch) -> MismatchedBranch(
+                                clientBranch = clientBranch,
+                                serverBranch = info.consensusBranchId,
+                                networkName = network
+                            )
+                            else -> null
+                        }
                     }
+                } catch (e: StatusRuntimeException) {
+                    // The node is momentarily unreachable or busy. In particular dragonxd returns
+                    // "-28: Rescanning..." for a while right after it (re)starts or while its wallet
+                    // is mid-rescan, and lightwalletd forwards that as a gRPC error. That is a
+                    // TRANSIENT server state, not a wallet-setup problem: letting it throw here
+                    // crashed the whole app on launch (FATAL EXCEPTION: getServerInfo -28). Skip the
+                    // one-time server-version check and let the main processing loop handle
+                    // connectivity — updateRanges() already catches StatusRuntimeException and
+                    // reports Reconnecting, so the app calmly waits and retries until the node is
+                    // ready instead of dying.
+                    android.util.Log.w("DRGXSYNC", "verifySetup: server busy/unreachable ($e); skipping check, sync loop will retry")
+                    twig("verifySetup: server info unavailable ($e); skipping check, will retry in the sync loop")
+                    null
                 }
             }
         }

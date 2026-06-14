@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.2.0-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.2.1-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,10 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.2.0 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.2.1 (build #${{ github.run_number }})
 
             本次更新：
+            • 【关键修复·节点重扫时 App 闪退】当你的节点(dragonxd)刚重启或正在重扫钱包时会短时返回 “-28: Rescanning…”，旧版 App 启动时拿不到节点信息就直接崩溃。现在遇到节点忙会“安静地等待并自动重试”，不再闪退（同步会显示连接中，节点就绪后自动继续）。
             • 【关键修复·同步到 90% 反复崩溃/永远扫不完】真因：同步时间较长，期间只要 App 被系统重建界面（横屏、息屏后唤醒、切到别的 App 再回来等都会触发），就会对“已经在跑的同步引擎”再启动一次而直接崩溃、然后重启、又卡回 90% 附近——如此反复、永远到不了 100%。本版让“启动同步”可安全重复调用（已在跑就只重新接管界面，不再崩）。这是“扫描卡在 90%”的根治。
             • 【同步体验·进度可见】扫描批大小 2500 → 100：矿池/多笔小额的钱包零钱很多，临近最新区块时每块都要更新成百上千个零钱的“见证”，单个大批次要算很久、进度条长时间不动像死机；改小后进度条持续往前走，且每个小批即时保存（切后台/杀进程也少丢进度）。注意：这种钱包**第一次**完整同步到链顶本身就偏慢（零钱越多越慢），扫完一次后请尽快用“合并零钱”，之后同步就快了。
             • 【紧急修复·导入后闪退/打不开】（v1.1.8 起）修复导入助记词后 App 立刻闪退、之后每次打开都崩溃的严重问题。根因：多钱包功能读取“当前钱包”记录时的一个类型转换 bug（与你的资金、密钥毫无关系，币始终安全）。
@@ -145,5 +146,5 @@ jobs:
 
             矿池/多笔小额到账用户使用顺序：卸载旧版 → 装新版 → 恢复钱包 → 等同步 100% → 我的 → 合并零钱 →（若提示需要则按引导完整重扫）→ 等几分钟确认 → 正常转账。
 
-            安装：下载 **DragonX-Wallet-v1.2.0-universal.apk**（兼容所有机型）。placeholder 测试签名，需先卸载旧版再装；卸载前务必已备份 24 词助记词。
+            安装：下载 **DragonX-Wallet-v1.2.1-universal.apk**（兼容所有机型）。placeholder 测试签名，需先卸载旧版再装；卸载前务必已备份 24 词助记词。
           files: artifacts/*.apk
