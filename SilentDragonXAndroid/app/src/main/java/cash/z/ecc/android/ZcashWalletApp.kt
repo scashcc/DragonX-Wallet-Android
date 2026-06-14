@@ -38,6 +38,25 @@ class ZcashWalletApp : Application(), CameraXConfig.Provider {
      */
     private var feedbackScope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    /**
+     * Process-lifetime scope that OWNS the block-sync engine.
+     *
+     * The [cash.z.ecc.android.sdk.Synchronizer] is a process singleton, but it used to be started
+     * with the Activity's `lifecycleScope`. `Synchronizer.start(parentScope)` parents the whole sync
+     * job (download → validate → scan loop) to that scope, and `lifecycleScope` is cancelled in the
+     * Activity's `onDestroy` — which fires when the app is swiped out of Recents (and on some OEM
+     * task kills) even while a foreground service keeps the PROCESS alive. The result: the foreground
+     * service held an empty, syncing-nothing process, "long-term background sync" silently stopped,
+     * and an in-progress 合并零钱 (which relies on the background scanner to advance block height and
+     * confirm its batches) stalled forever waiting for confirmations that could never arrive.
+     *
+     * Parenting sync to this process-lifetime scope instead means it keeps running for as long as the
+     * process lives and only stops when explicitly told — `synchronizer.stop()` is still called on
+     * wipe / server-switch / corruption-recovery, and each of those cancels the synchronizer's own
+     * child scope without touching this one (so it can safely parent the next synchronizer instance).
+     */
+    val syncScope: CoroutineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
     override fun attachBaseContext(base: Context?) {
         super.attachBaseContext(base)
 

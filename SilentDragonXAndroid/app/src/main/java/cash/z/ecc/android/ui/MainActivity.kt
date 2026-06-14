@@ -248,7 +248,14 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
                 mainViewModel.setLoading(true)
                 feedback.report(SYNC_START)
                 try {
-                    synchronizer.start(lifecycleScope)
+                    // IMPORTANT: parent sync to the PROCESS-lifetime scope, never this Activity's
+                    // lifecycleScope. lifecycleScope is cancelled in onDestroy (app swiped from
+                    // Recents / OEM task kill), which would kill the block scanner even while the
+                    // foreground service keeps the process alive — silently breaking background sync
+                    // and stalling an in-progress 合并零钱. The synchronizer is a process singleton and
+                    // is stopped explicitly (wipe / server switch / recovery), so a process-lifetime
+                    // parent is the correct owner.
+                    synchronizer.start(ZcashWalletApp.instance.syncScope)
                 } catch (e: cash.z.ecc.android.sdk.exception.SynchronizerException.FalseStart) {
                     // Defensive: a race left it already started. Never crash here — just continue.
                     twig("start() found an already-started synchronizer; continuing without restart")
@@ -476,8 +483,17 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
         actionLabel: String = getString(android.R.string.ok),
         action: () -> Unit = {}
     ): Snackbar {
+        val container = findViewById<View>(R.id.main_activity_container)
+        if (container == null) {
+            // No live content view. Now that sync runs process-long (see ZcashWalletApp.syncScope),
+            // an auto-recovery snackbar can fire while the app is backgrounded and the Activity has
+            // been destroyed. Don't crash trying to attach a Snackbar to a dead view tree; the
+            // recovery action itself proceeds on a process-lifetime scope regardless of the UI.
+            twig("showSnackbar skipped (no live UI): $message")
+            return snackbar ?: Snackbar.make(window.decorView, message, Snackbar.LENGTH_SHORT)
+        }
         return if (snackbar == null) {
-            val view = findViewById<View>(R.id.main_activity_container)
+            val view = container
             val snacks = Snackbar
                 .make(view, "$message", Snackbar.LENGTH_INDEFINITE)
                 .setAction(actionLabel) { action() }
@@ -588,8 +604,12 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
                 if (dialog == null) {
                     notified = true
                     runOnUiThread {
-                        dialog = showUninitializedError(error) {
-                            dialog = null
+                        // Guard: with process-long sync this can fire while the Activity is dead;
+                        // adding a dialog window to a destroyed Activity would crash.
+                        if (!isFinishing && !isDestroyed) runCatching {
+                            dialog = showUninitializedError(error) {
+                                dialog = null
+                            }
                         }
                     }
                 }
@@ -637,8 +657,10 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
                 if (dialog == null) {
                     notified = true
                     runOnUiThread {
-                        dialog = showCriticalProcessorError(error) {
-                            dialog = null
+                        if (!isFinishing && !isDestroyed) runCatching {
+                            dialog = showCriticalProcessorError(error) {
+                                dialog = null
+                            }
                         }
                     }
                 }
@@ -724,15 +746,22 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
         recoveryPrefs.edit().putInt("recovery_count", recoveryCount + 1).apply()
         recoveryPrefs.edit().putLong("last_auto_recovery_ms", now).apply()
 
-        runOnUiThread {
-            ignoreScanFailure = true
-            dialog?.dismiss()
-            dialog = null
-            setLoading(true, "区块数据损坏，正在清除并重新同步…")
-            showSnackbar("检测到区块数据损坏，正在自动修复：清除区块数据并重新同步（助记词不受影响，无需重装）")
+        ignoreScanFailure = true
+        if (!isFinishing && !isDestroyed) {
+            runOnUiThread {
+                runCatching {
+                    dialog?.dismiss()
+                    dialog = null
+                    setLoading(true, "区块数据损坏，正在清除并重新同步…")
+                    showSnackbar("检测到区块数据损坏，正在自动修复：清除区块数据并重新同步（助记词不受影响，无需重装）")
+                }
+            }
         }
 
-        lifecycleScope.launch {
+        // Run erase+restart on the PROCESS scope, NOT lifecycleScope: this handler can now fire while
+        // the app is backgrounded with the Activity destroyed (sync runs process-long), and a
+        // cancelled lifecycleScope would skip the recovery entirely, leaving the DB corrupt forever.
+        ZcashWalletApp.instance.syncScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching { DependenciesHolder.synchronizer.stop() }
                     .onFailure { twig("recovery: synchronizer.stop failed: $it") }
@@ -782,7 +811,8 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
         fkRewindInProgress = true
         runOnUiThread { showSnackbar("检测到数据不一致，正在快速回退重扫修复（保留历史与余额）…") }
 
-        lifecycleScope.launch {
+        // Process scope, not lifecycleScope: the rewind must complete even if the Activity is gone.
+        ZcashWalletApp.instance.syncScope.launch {
             try {
                 withContext(Dispatchers.IO) {
                     val sync = DependenciesHolder.synchronizer
@@ -811,7 +841,10 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
         val component = launchIntent?.component
         if (component != null) {
-            startActivity(Intent.makeRestartActivityTask(component))
+            // Use the application context: restartApp() can be invoked from a process-lifetime scope
+            // when no Activity is alive (background recovery). makeRestartActivityTask already sets
+            // NEW_TASK | CLEAR_TASK, so it launches correctly from a non-Activity context too.
+            applicationContext.startActivity(Intent.makeRestartActivityTask(component))
         }
         Runtime.getRuntime().exit(0)
     }
