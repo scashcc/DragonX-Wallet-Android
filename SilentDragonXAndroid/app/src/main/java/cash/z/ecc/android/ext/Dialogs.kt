@@ -237,11 +237,19 @@ fun Context.showReorgRepairDialog(onDismiss: () -> Unit = {}): Dialog {
         .show()
 }
 
-fun Context.showServerPickerDialog(onServerSelected: (String) -> Unit = {}): Dialog {
+fun Context.showServerPickerDialog(
+    userInitiated: Boolean = false,
+    onServerSelected: (String) -> Unit = {}
+): Dialog {
     val servers = Const.Default.Server.serverList
     val port = Const.Default.Server.PORT
-    // Display names start as "Checking..." and get updated
-    val displayItems = servers.map { "$it — checking..." }.toMutableList()
+    val currentHost = cash.z.ecc.android.di.DependenciesHolder.prefs[Const.Pref.SERVER_HOST]
+        ?: Const.Default.Server.HOST
+    // Display names start as "Checking..." and get updated. "●" marks the currently-selected node.
+    val displayItems = servers.map { host ->
+        val marker = if (host == currentHost) "● " else ""
+        "$marker$host — checking..."
+    }.toMutableList()
 
     val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, displayItems)
 
@@ -250,16 +258,23 @@ fun Context.showServerPickerDialog(onServerSelected: (String) -> Unit = {}): Dia
         setPadding(32, 16, 32, 16)
     }
 
-    val dialog = MaterialAlertDialogBuilder(this)
-        .setTitle("Select a Server")
-        .setMessage("The current server is unavailable. Choose a server to connect to:")
+    val builder = MaterialAlertDialogBuilder(this)
+        .setTitle(if (userInitiated) "选择节点 Choose node" else "Select a Server")
+        .setMessage(
+            if (userInitiated) "点击任意节点即可切换（● 为当前节点）。Tap a node to switch."
+            else "The current server is unavailable. Choose a server to connect to:"
+        )
         .setView(listView)
-        .setCancelable(false)
-        .setNegativeButton("Exit") { d, _ ->
+        .setCancelable(userInitiated)
+    if (userInitiated) {
+        builder.setNegativeButton("关闭 Close") { d, _ -> d.dismiss() }
+    } else {
+        builder.setNegativeButton("Exit") { d, _ ->
             d.dismiss()
             exitProcess(0)
         }
-        .show()
+    }
+    val dialog = builder.show()
 
     // Check each server's connectivity in the background
     val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -274,7 +289,9 @@ fun Context.showServerPickerDialog(onServerSelected: (String) -> Unit = {}): Dia
                 false
             }
             withContext(Dispatchers.Main) {
-                displayItems[index] = if (online) "✓  $host" else "✗  $host  (offline)"
+                val marker = if (host == currentHost) "● " else ""
+                displayItems[index] =
+                    if (online) "$marker✓  $host" else "$marker✗  $host  (offline)"
                 adapter.notifyDataSetChanged()
             }
         }

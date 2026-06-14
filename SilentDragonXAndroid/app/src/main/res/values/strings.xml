@@ -17,6 +17,7 @@
 
     <!-- Consolidate small notes (合并零钱) -->
     <string name="profile_consolidate">合并零钱 Consolidate</string>
+    <string name="profile_node">选择节点 Choose node</string>
     <string name="consolidate_title">合并零钱 Consolidate</string>
     <string name="consolidate_explanation">如果你收到过很多笔小额转入（例如矿池打款），钱包里会积累成百上千个“零钱”碎片。转大额时，钱包要把几百个碎片塞进一笔交易，体积过大会被矿工拒绝打包，最终超时失败。\n\n点击下方按钮，钱包会全自动把这些零钱合并成几个大额，无需你逐笔操作。合并笔数会根据你的零钱数量自动决定。完成并确认后，就能正常转出大额了。\n\nIf your wallet received many small payments, it holds hundreds of tiny notes. This automatically merges them into a few large ones so you can send normally again.</string>
     <string name="consolidate_fee_note">每合并一笔需支付网络手续费 0.0001 DRGX（DragonX 节点对隐私交易要求的最低手续费）。\nA network fee of 0.0001 DRGX applies per consolidation transaction.</string>

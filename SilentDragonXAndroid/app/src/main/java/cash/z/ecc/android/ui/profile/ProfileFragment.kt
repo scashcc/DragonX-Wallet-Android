@@ -66,6 +66,11 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
             // needed here; the consolidation screen has its own confirmation step.
             mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_consolidate)
         }
+        binding.buttonNode.setOnClickListener {
+            // DragonX: an always-available, latency-checked node list (switches without restart),
+            // instead of one that only pops up when the connection fails.
+            mainActivity?.showServerPickerDialog(userInitiated = true)
+        }
         binding.buttonRescan.setOnClickListener {
             tapped(PROFILE_RESCAN)
             onRescanWallet()
