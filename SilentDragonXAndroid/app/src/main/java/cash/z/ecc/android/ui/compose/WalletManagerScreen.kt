@@ -1,5 +1,6 @@
 package cash.z.ecc.android.ui.compose
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,12 +33,29 @@ data class WalletItem(val index: Int, val label: String, val isActive: Boolean)
 @Composable
 fun WalletManagerScreen(
     wallets: List<WalletItem>,
+    busy: Boolean,
+    busyText: String,
     onSwitch: (Int) -> Unit,
     onCreate: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     var showNew by remember { mutableStateOf(false) }
     var newLabel by remember { mutableStateOf("钱包 ${wallets.size + 1}") }
+
+    if (busy) {
+        GradientBackground {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+            ) {
+                androidx.compose.material3.CircularProgressIndicator(color = DragonXGreen)
+                Spacer(Modifier.height(16.dp))
+                Text(busyText, color = TextSecondary, fontSize = 14.sp)
+            }
+        }
+        return
+    }
 
     GradientBackground {
         Column(
