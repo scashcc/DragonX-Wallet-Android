@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.3.9-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.4.0-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,10 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.3.9 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.4.0 (build #${{ github.run_number }})
 
             【本次更新】
+            • 【自愈】扫描遇到「FOREIGN KEY constraint failed」(链顶小重组导致的数据不一致)时，自动「快速回退约一周重扫」修复，保留历史与余额、不再弹看不懂的报错框、也不用从头同步。
             • 【安全】转账自动防双花：单笔转账最多只用 6 个零钱(note)。若一笔需要超过 6 个，会直接终止、不向网络提交（避免在转发节点内存池留下残留、导致双花把钱包锁死发不出去），并弹出「去合并零钱」引导——先合并再转，安全又能成功。
             • 修复「新建/切换钱包没反应」：以前在同步繁忙时点新建钱包会卡住主线程像没反应；现在改到后台执行并显示「正在创建/切换…」转圈，同步越忙等待越久但不会卡死。
             • 恢复钱包「起始高度」加引导：新钱包一键填最新高度；老钱包按创建「年/月」估算高度；并重度提醒——别留空/别填太小（会从链头同步、手机上要好几天），也别填太晚（会漏掉之前的交易和余额）。

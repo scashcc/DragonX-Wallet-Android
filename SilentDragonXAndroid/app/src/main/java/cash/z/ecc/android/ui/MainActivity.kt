@@ -570,6 +570,15 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
             // stops the synchronizer and restarts the app from under it.
             return true
         }
+        // A "FOREIGN KEY constraint failed" while scanning is a data-table inconsistency (usually a
+        // small reorg near the tip). A full wipe would needlessly resync from the birthday, so we
+        // instead quick-rewind ~1 week and re-scan: it fixes the recent inconsistency while keeping
+        // older history/funds. Falls back to the manual repair dialog if it just happened.
+        if (isForeignKeyConstraintError(error)) {
+            twig("Detected FK-constraint scan error; quick-rewinding ~1 week to recover. error=$error")
+            autoFkRewind()
+            return true
+        }
         var notified = false
         when (error) {
             is CompactBlockProcessorException.Uninitialized -> {
@@ -721,6 +730,61 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
                 }.onFailure { twig("recovery: erase failed: $it") }
             }
             restartApp()
+        }
+    }
+
+    @Volatile
+    private var fkRewindInProgress = false
+
+    private fun isForeignKeyConstraintError(error: Throwable?): Boolean {
+        var t: Throwable? = error
+        var depth = 0
+        while (t != null && depth < 12) {
+            val msg = (t.message ?: "").lowercase(java.util.Locale.US)
+            if (msg.contains("foreign key constraint") || msg.contains("constraint failed")) return true
+            t = t.cause
+            depth++
+        }
+        return false
+    }
+
+    /**
+     * Recover from a "FOREIGN KEY constraint failed" scan error by quick-rewinding ~1 week on the
+     * running synchronizer (same mechanism as manual Quick Rescan); the scanner then re-scans from
+     * the rewound height, dropping the inconsistent recent rows while keeping older history/funds.
+     * Guarded against re-entry; a cooldown falls back to the manual repair dialog if it keeps firing.
+     */
+    private fun autoFkRewind() {
+        if (fkRewindInProgress) return
+
+        val recoveryPrefs = getSharedPreferences("dragonx_recovery", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - recoveryPrefs.getLong("last_fk_rewind_ms", 0L) < 120_000L) {
+            twig("FK rewind ran <2min ago; not looping. Showing manual repair dialog.")
+            runOnUiThread { if (dialog == null) dialog = showReorgRepairDialog { dialog = null } }
+            return
+        }
+        recoveryPrefs.edit().putLong("last_fk_rewind_ms", now).apply()
+        fkRewindInProgress = true
+        runOnUiThread { showSnackbar("检测到数据不一致，正在快速回退重扫修复（保留历史与余额）…") }
+
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val sync = DependenciesHolder.synchronizer
+                    val tip = sync.latestHeight?.value ?: sync.networkHeight.value?.value
+                    val activation = sync.network.saplingActivationHeight.value
+                    if (tip != null) {
+                        val target = (tip - 8064L).coerceAtLeast(activation)
+                        sync.rewindToNearestHeight(BlockHeight.new(sync.network, target), true)
+                    }
+                }
+            } catch (t: Throwable) {
+                twig("auto FK rewind failed: $t")
+                runOnUiThread { if (dialog == null) dialog = showReorgRepairDialog { dialog = null } }
+            } finally {
+                fkRewindInProgress = false
+            }
         }
     }
 
