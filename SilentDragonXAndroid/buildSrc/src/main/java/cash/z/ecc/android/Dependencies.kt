@@ -9,8 +9,8 @@ object Deps {
     const val compileSdkVersion =   33  // bumped 31->33 so the app can use Jetpack Compose Material3 1.0.x (CI already installs platforms;android-33; SDK module already compiles against 33). targetSdk stays 30.
     const val minSdkVersion =       21
     const val targetSdkVersion =    30
-    const val versionName =         "1.4.0"
-    const val versionCode =         1_04_00_800  // last digits are alpha(0XX) beta(2XX) rc(4XX) release(8XX). Ex: 1_08_04_401 is an release candidate build of version 1.8.4 and 1_08_04_800 would be the final release.
+    const val versionName =         "1.4.1"
+    const val versionCode =         1_04_01_800  // last digits are alpha(0XX) beta(2XX) rc(4XX) release(8XX). Ex: 1_08_04_401 is an release candidate build of version 1.8.4 and 1_08_04_800 would be the final release.
     const val packageName =         "dragonx.android"
 
 
