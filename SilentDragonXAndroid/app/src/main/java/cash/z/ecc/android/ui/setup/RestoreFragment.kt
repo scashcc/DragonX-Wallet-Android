@@ -2,22 +2,20 @@ package cash.z.ecc.android.ui.setup
 
 import android.graphics.drawable.Drawable
 import android.os.Bundle
-import android.os.SystemClock
-import android.text.InputType
 import android.view.KeyEvent
 import android.view.LayoutInflater
-import android.view.MotionEvent
-import android.view.MotionEvent.ACTION_DOWN
-import android.view.MotionEvent.ACTION_UP
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
+import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.widget.addTextChangedListener
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.RecyclerView
 import cash.z.ecc.android.R
 import cash.z.ecc.android.ZcashWalletApp
 import cash.z.ecc.android.databinding.FragmentRestoreBinding
-import cash.z.ecc.android.ext.goneIf
 import cash.z.ecc.android.ext.showConfirmation
 import cash.z.ecc.android.ext.showInvalidSeedPhraseError
 import cash.z.ecc.android.ext.showSharedLibraryCriticalError
@@ -28,17 +26,24 @@ import cash.z.ecc.android.sdk.model.BlockHeight
 import cash.z.ecc.android.ui.base.BaseFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.tylersuehr.chips.Chip
-import com.tylersuehr.chips.ChipsAdapter
-import com.tylersuehr.chips.SeedWordAdapter
 import kotlinx.coroutines.launch
 
+/**
+ * Restore-from-seed screen.
+ *
+ * DragonX: the 24 seed words are entered in a fixed 4-column × 6-row numbered grid instead of the
+ * old chips input. Each cell is an independent field, so any single word can be corrected in place
+ * — fixing the old "delete one word and everything after it shifts, forcing a full re-type"
+ * problem. Each cell autocompletes against the BIP-39 word list.
+ */
 class RestoreFragment : BaseFragment<FragmentRestoreBinding>(), View.OnKeyListener {
     override val screen = Report.Screen.RESTORE
 
     private val walletSetup: WalletSetupViewModel by activityViewModels()
 
-    private lateinit var seedWordRecycler: RecyclerView
-    private var seedWordAdapter: SeedWordAdapter? = null
+    private val wordCells = ArrayList<AutoCompleteTextView>(SEED_WORD_COUNT)
+    private var reportedStart = false
+    private var reportedComplete = false
 
     override fun inflate(inflater: LayoutInflater): FragmentRestoreBinding =
         FragmentRestoreBinding.inflate(inflater)
@@ -46,37 +51,77 @@ class RestoreFragment : BaseFragment<FragmentRestoreBinding>(), View.OnKeyListen
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        seedWordRecycler = binding.chipsInput.findViewById<RecyclerView>(R.id.chips_recycler)
-        seedWordAdapter = SeedWordAdapter(seedWordRecycler.adapter as ChipsAdapter).onDataSetChanged {
-            onChipsModified()
-        }.also { onChipsModified() }
-        seedWordRecycler.adapter = seedWordAdapter
-
-        binding.chipsInput.apply {
-            setFilterableChipList(getChips())
-            setDelimiter("[ ;,]", true)
-        }
+        buildSeedGrid()
 
         binding.buttonDone.setOnClickListener {
             onDone().also { tapped(RESTORE_DONE) }
         }
-
         binding.buttonSuccess.setOnClickListener {
             onEnterWallet().also { tapped(RESTORE_SUCCESS) }
         }
-
         binding.buttonClear.setOnClickListener {
             onClearSeedWords().also { tapped(RESTORE_CLEAR) }
         }
+        updateDoneViews()
     }
+
+    /**
+     * Build the 24-cell numbered grid: 6 rows of 4 equal-width cells. Each cell stores its word
+     * independently, so editing one never affects the others.
+     */
+    private fun buildSeedGrid() {
+        val context = requireContext()
+        val inflater = LayoutInflater.from(context)
+        val words = resources.getStringArray(R.array.word_list)
+        val suggestions = ArrayAdapter(context, android.R.layout.simple_list_item_1, words)
+
+        wordCells.clear()
+        binding.seedGrid.removeAllViews()
+        var index = 0
+        for (row in 0 until SEED_ROWS) {
+            val rowView = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+            for (col in 0 until SEED_COLS) {
+                val cell = inflater.inflate(R.layout.item_seed_word, rowView, false)
+                cell.layoutParams = LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                )
+                val number = cell.findViewById<TextView>(R.id.text_number)
+                val input = cell.findViewById<AutoCompleteTextView>(R.id.input_word)
+                number.text = (index + 1).toString()
+                input.setAdapter(suggestions)
+                input.imeOptions =
+                    if (index == SEED_WORD_COUNT - 1) EditorInfo.IME_ACTION_DONE
+                    else EditorInfo.IME_ACTION_NEXT
+                input.addTextChangedListener { updateDoneViews() }
+                wordCells.add(input)
+                rowView.addView(cell)
+                index++
+            }
+            binding.seedGrid.addView(rowView)
+        }
+    }
+
+    private fun collectSeedPhrase(): String =
+        wordCells.joinToString(" ") { it.text.toString().trim().lowercase() }.trim()
+
+    private fun filledWordCount(): Int =
+        wordCells.count { it.text.toString().trim().isNotEmpty() }
 
     private fun onClearSeedWords() {
         mainActivity?.showConfirmation(
-            "Clear All Words",
-            "Are you sure you would like to clear all the seed words and type them again?",
-            "Clear",
+            "清除全部 Clear all words",
+            "确定清除所有已输入的助记词、重新输入吗？Clear all entered words and start over?",
+            "清除 Clear",
             onPositive = {
-                binding.chipsInput.clearSelectedChips()
+                wordCells.forEach { it.setText("") }
+                wordCells.firstOrNull()?.requestFocus()
+                updateDoneViews()
             }
         )
     }
@@ -85,17 +130,17 @@ class RestoreFragment : BaseFragment<FragmentRestoreBinding>(), View.OnKeyListen
         super.onActivityCreated(savedInstanceState)
         mainActivity?.onFragmentBackPressed(this) {
             tapped(RESTORE_BACK)
-            if (seedWordAdapter == null || seedWordAdapter?.itemCount == 1) {
+            if (filledWordCount() == 0) {
                 onExit()
             } else {
                 MaterialAlertDialogBuilder(requireContext())
-                    .setMessage("Are you sure? For security, the words that you have entered will be cleared!")
-                    .setTitle("Abort?")
-                    .setPositiveButton("Stay") { dialog, _ ->
+                    .setMessage("确定退出？为安全起见，已输入的助记词会被清除。Entered words will be cleared.")
+                    .setTitle("退出？Abort?")
+                    .setPositiveButton("继续输入 Stay") { dialog, _ ->
                         mainActivity?.reportFunnel(Restore.Stay)
                         dialog.dismiss()
                     }
-                    .setNegativeButton("Exit") { dialog, _ ->
+                    .setNegativeButton("退出 Exit") { dialog, _ ->
                         dialog.dismiss()
                         onExit()
                     }
@@ -104,15 +149,8 @@ class RestoreFragment : BaseFragment<FragmentRestoreBinding>(), View.OnKeyListen
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        // Require one less tap to enter the seed words
-        touchScreenForUser()
-    }
-
     private fun onExit() {
         mainActivity?.reportFunnel(Restore.Exit)
-        hideAutoCompleteWords()
         mainActivity?.hideKeyboard()
         mainActivity?.navController?.popBackStack()
     }
@@ -126,17 +164,17 @@ class RestoreFragment : BaseFragment<FragmentRestoreBinding>(), View.OnKeyListen
         mainActivity?.reportFunnel(Restore.Done)
         mainActivity?.hideKeyboard()
         val activation = ZcashWalletApp.instance.defaultNetwork.saplingActivationHeight
-        val seedPhrase = binding.chipsInput.selectedChips.joinToString(" ") {
-            it.title.trim().lowercase()
-        }
-        var birthday = binding.root.findViewById<TextView>(R.id.input_birthdate).text.toString()
-            .let { birthdateString ->
-                if (birthdateString.isNullOrEmpty()) activation.value else birthdateString.toLong()
-            }.coerceAtLeast(activation.value)
+        val seedPhrase = collectSeedPhrase()
+        val birthday = binding.inputBirthdate.text.toString().let { s ->
+            if (s.isEmpty()) activation.value else (s.toLongOrNull() ?: activation.value)
+        }.coerceAtLeast(activation.value)
 
         try {
             walletSetup.validatePhrase(seedPhrase)
-            importWallet(seedPhrase, BlockHeight.new(ZcashWalletApp.instance.defaultNetwork, birthday))
+            importWallet(
+                seedPhrase,
+                BlockHeight.new(ZcashWalletApp.instance.defaultNetwork, birthday)
+            )
         } catch (t: Throwable) {
             mainActivity?.showInvalidSeedPhraseError(t)
         }
@@ -167,73 +205,26 @@ class RestoreFragment : BaseFragment<FragmentRestoreBinding>(), View.OnKeyListen
         binding.buttonSuccess.isEnabled = false
     }
 
-    private fun onChipsModified() {
-        updateDoneViews()
-        forceShowKeyboard()
-    }
-
-    private fun updateDoneViews(): Boolean {
-        val count = seedWordAdapter?.itemCount ?: 0
-        reportWords(count - 1) // subtract 1 for the editText
-        val isDone = count > 24
-        binding.groupDone.goneIf(!isDone)
-        return !isDone
-    }
-
-    // forcefully show the keyboard as a hack to fix odd behavior where the keyboard
-    // sometimes closes randomly and inexplicably in between seed word entries
-    private fun forceShowKeyboard() {
-        requireView().postDelayed(
-            {
-                val isDone = (seedWordAdapter?.itemCount ?: 0) > 24
-                val focusedView = if (isDone) binding.inputBirthdate else seedWordAdapter!!.editText
-                mainActivity!!.showKeyboard(focusedView)
-                focusedView.requestFocus()
-            },
-            500L
-        )
-    }
-
-    private fun reportWords(count: Int) {
-        mainActivity?.run {
-//            reportFunnel(Restore.SeedWordCount(count))
-            if (count == 1) {
-                reportFunnel(Restore.SeedWordsStarted)
-            } else if (count == 24) {
-                reportFunnel(Restore.SeedWordsCompleted)
-            }
+    private fun updateDoneViews() {
+        val count = filledWordCount()
+        if (count >= 1 && !reportedStart) {
+            reportedStart = true
+            mainActivity?.reportFunnel(Restore.SeedWordsStarted)
         }
-    }
-
-    private fun hideAutoCompleteWords() {
-        seedWordAdapter?.editText?.setText("")
-    }
-
-    private fun getChips(): List<Chip> {
-        return resources.getStringArray(R.array.word_list).map {
-            SeedWordChip(it)
+        val isDone = count >= SEED_WORD_COUNT
+        if (isDone && !reportedComplete) {
+            reportedComplete = true
+            mainActivity?.reportFunnel(Restore.SeedWordsCompleted)
         }
+        binding.buttonDone.isEnabled = isDone
     }
 
-    private fun touchScreenForUser() {
-        seedWordAdapter?.editText?.apply {
-            postDelayed(
-                {
-                    seedWordAdapter?.editText?.inputType = InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-                    dispatchTouchEvent(motionEvent(ACTION_DOWN))
-                    dispatchTouchEvent(motionEvent(ACTION_UP))
-                },
-                100L
-            )
-        }
-    }
+    override fun onKey(v: View?, keyCode: Int, event: KeyEvent?): Boolean = false
 
-    private fun motionEvent(action: Int) = SystemClock.uptimeMillis().let { now ->
-        MotionEvent.obtain(now, now, action, 0f, 0f, 0)
-    }
-
-    override fun onKey(v: View?, keyCode: Int, event: KeyEvent?): Boolean {
-        return false
+    companion object {
+        private const val SEED_WORD_COUNT = 24
+        private const val SEED_COLS = 4
+        private const val SEED_ROWS = 6
     }
 }
 
