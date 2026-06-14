@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 fun PrivateKeyRestoreScreen(
     busy: Boolean,
     error: String?,
+    latestHeight: Long,
     onBack: () -> Unit,
     onRestore: (key: String, birthday: String) -> Unit,
 ) {
@@ -71,20 +72,10 @@ fun PrivateKeyRestoreScreen(
             )
 
             Spacer(Modifier.height(16.dp))
-            Text("起始区块高度（可选）", color = TextSecondary, fontSize = 13.sp)
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = birthday,
-                onValueChange = { input -> birthday = input.filter { it.isDigit() } },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("留空则从最近检查点开始", color = TextDim) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "填入你这个钱包首次收款的大致区块高度可加快同步；不确定就留空。",
-                color = TextDim, fontSize = 12.sp,
+            BirthdayHelpSection(
+                birthday = birthday,
+                onBirthdayChange = { birthday = it },
+                latestHeight = latestHeight,
             )
 
             if (error != null) {

@@ -13,6 +13,8 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import cash.z.ecc.android.ZcashWalletApp
+import cash.z.ecc.android.di.DependenciesHolder
+import cash.z.ecc.android.ext.Const
 import cash.z.ecc.android.ext.showConfirmation
 import cash.z.ecc.android.ext.showCriticalMessage
 import cash.z.ecc.android.sdk.SdkSynchronizer
@@ -48,6 +50,7 @@ class RescanFragment : androidx.fragment.app.Fragment() {
                     onQuick = { onQuickRescan() },
                     onFull = { onFullRescan() },
                     onWipe = { onWipe() },
+                    onRescanFromHeight = { onRescanFromHeight(it) },
                     onBack = { (activity as? MainActivity)?.navController?.popBackStack() },
                 )
             }
@@ -87,6 +90,20 @@ class RescanFragment : androidx.fragment.app.Fragment() {
             } catch (t: Throwable) {
                 (activity as? MainActivity)?.showCriticalMessage("快速重扫失败", t.message ?: t.toString())
             }
+        }
+    }
+
+    private fun onRescanFromHeight(height: Long) {
+        val net = ZcashWalletApp.instance.defaultNetwork
+        val h = height.coerceAtLeast(net.saplingActivationHeight.value)
+        (activity as? MainActivity)?.showConfirmation(
+            "从高度 ${String.format(Locale.US, "%,d", h)} 重扫？",
+            "将把钱包生日改为该高度、清除本地区块数据并从那里重新同步。高度越低越慢；助记词/密钥不受影响。App 会自动重启。",
+            "开始重扫"
+        ) {
+            DependenciesHolder.lockBox[Const.Backup.BIRTHDAY_HEIGHT] = h.toInt()
+            viewModel.wipe()
+            (activity as? MainActivity)?.restartApp()
         }
     }
 

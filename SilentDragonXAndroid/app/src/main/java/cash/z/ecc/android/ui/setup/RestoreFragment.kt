@@ -35,6 +35,7 @@ class RestoreFragment : BaseFragment<FragmentRestoreBinding>() {
     private val walletSetup: WalletSetupViewModel by activityViewModels()
     private val busy = MutableStateFlow(false)
     private val error = MutableStateFlow<String?>(null)
+    private val latestHeight = MutableStateFlow(0L)
 
     override fun inflate(inflater: LayoutInflater): FragmentRestoreBinding =
         FragmentRestoreBinding.inflate(inflater)
@@ -48,14 +49,28 @@ class RestoreFragment : BaseFragment<FragmentRestoreBinding>() {
         setContent {
             val isBusy by busy.collectAsState()
             val err by error.collectAsState()
+            val h by latestHeight.collectAsState()
             DragonXTheme {
                 RestoreScreen(
                     busy = isBusy,
                     error = err,
+                    latestHeight = h,
                     onBack = { mainActivity?.navController?.popBackStack() },
                     onRestore = { words, birthdayStr -> onRestore(words, birthdayStr) },
                 )
             }
+        }
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        viewLifecycleOwner.lifecycleScope.launch {
+            latestHeight.value = runCatching {
+                BlockHeight.ofLatestCheckpoint(
+                    ZcashWalletApp.instance,
+                    ZcashWalletApp.instance.defaultNetwork
+                ).value
+            }.getOrDefault(0L)
         }
     }
 

@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 fun RestoreScreen(
     busy: Boolean,
     error: String?,
+    latestHeight: Long,
     onBack: () -> Unit,
     onRestore: (words: List<String>, birthday: String) -> Unit,
 ) {
@@ -91,16 +92,11 @@ fun RestoreScreen(
                 Spacer(Modifier.height(6.dp))
             }
 
-            Spacer(Modifier.height(10.dp))
-            Text("起始区块高度（可选，留空从最早开始）", color = TextSecondary, fontSize = 13.sp)
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = birthday,
-                onValueChange = { input -> birthday = input.filter { it.isDigit() } },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("如 3050000", color = TextDim) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            Spacer(Modifier.height(12.dp))
+            BirthdayHelpSection(
+                birthday = birthday,
+                onBirthdayChange = { birthday = it },
+                latestHeight = latestHeight,
             )
 
             if (error != null) {

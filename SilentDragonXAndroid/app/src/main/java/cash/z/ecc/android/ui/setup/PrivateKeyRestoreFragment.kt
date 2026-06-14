@@ -31,6 +31,7 @@ class PrivateKeyRestoreFragment : Fragment() {
     private val walletSetup: WalletSetupViewModel by activityViewModels()
     private val busy = MutableStateFlow(false)
     private val error = MutableStateFlow<String?>(null)
+    private val latestHeight = MutableStateFlow(0L)
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -41,14 +42,28 @@ class PrivateKeyRestoreFragment : Fragment() {
         setContent {
             val isBusy by busy.collectAsState()
             val err by error.collectAsState()
+            val h by latestHeight.collectAsState()
             DragonXTheme {
                 PrivateKeyRestoreScreen(
                     busy = isBusy,
                     error = err,
+                    latestHeight = h,
                     onBack = { (activity as? MainActivity)?.navController?.popBackStack() },
                     onRestore = { key, birthday -> onRestore(key, birthday) },
                 )
             }
+        }
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        viewLifecycleOwner.lifecycleScope.launch {
+            latestHeight.value = runCatching {
+                BlockHeight.ofLatestCheckpoint(
+                    ZcashWalletApp.instance,
+                    ZcashWalletApp.instance.defaultNetwork
+                ).value
+            }.getOrDefault(0L)
         }
     }
 

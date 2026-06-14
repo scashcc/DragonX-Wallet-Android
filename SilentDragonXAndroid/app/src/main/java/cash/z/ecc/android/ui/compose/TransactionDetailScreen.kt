@@ -81,7 +81,7 @@ fun TransactionDetailScreen(
                     if (!inbound) DetailRow("网络费 Fee", "${WalletZecFormmatter.toZecStringFull(Zatoshi(ZcashSdk.MINERS_FEE.value))} DRGX")
                     if (!inbound && !tx.toAddress.isNullOrEmpty()) DetailRow("收款地址 To", tx.toAddress!!, mono = true)
                     if (memo != null) DetailRow("备注 Memo", memo)
-                    if (txid != null) DetailRow("交易 ID", txid, mono = true, onClick = { onCopyTxid(txid) }, hint = "点击复制")
+                    if (txid != null) DetailRow("Tx Hash 交易ID", txid, mono = true, onClick = { onCopyTxid(txid) }, hint = "点击复制")
                 }
             }
 
