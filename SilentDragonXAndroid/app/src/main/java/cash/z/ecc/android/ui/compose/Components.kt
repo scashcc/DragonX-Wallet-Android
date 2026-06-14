@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -96,6 +98,28 @@ fun ActionTile(
         }
         Spacer(Modifier.height(8.dp))
         Text(label, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** Top header for secondary screens: a back button and a title. */
+@Composable
+fun ScreenHeader(title: String, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            onClick = onBack,
+            shape = CircleShape,
+            color = SurfaceCard2,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = TextSecondary, modifier = Modifier.size(20.dp))
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Text(title, color = TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

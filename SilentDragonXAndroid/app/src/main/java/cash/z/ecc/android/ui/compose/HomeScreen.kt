@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cash.z.ecc.android.ext.WalletZecFormmatter
 import cash.z.ecc.android.sdk.Synchronizer
+import cash.z.ecc.android.sdk.db.entity.ConfirmedTransaction
 import cash.z.ecc.android.ui.home.HomeViewModel
 
 /**
@@ -46,6 +47,7 @@ fun HomeScreen(
     state: HomeViewModel.UiModel?,
     nodeHost: String,
     walletLabel: String,
+    recentTx: List<ConfirmedTransaction>,
     onSend: () -> Unit,
     onReceive: () -> Unit,
     onConsolidate: () -> Unit,
@@ -76,7 +78,15 @@ fun HomeScreen(
             Spacer(Modifier.height(26.dp))
             SectionHeader("最近交易 Recent", "查看全部", onHistory)
             Spacer(Modifier.height(12.dp))
-            RecentEntryCard(onHistory)
+            if (recentTx.isEmpty()) {
+                RecentEntryCard(onHistory)
+            } else {
+                Surface(shape = RoundedCornerShape(18.dp), color = SurfaceCard, modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        recentTx.take(4).forEach { tx -> TxRow(tx) }
+                    }
+                }
+            }
         }
     }
 }

@@ -59,9 +59,7 @@
     </fragment>
     <fragment
         android:id="@+id/nav_receive"
-        android:name="cash.z.ecc.android.ui.tab_layout.TabLayoutFragment"
-        tools:layout="@layout/fragment_tab_layout" >
-    </fragment>
+        android:name="cash.z.ecc.android.ui.receive.ReceiveFragment" />
     <fragment
         android:id="@+id/nav_scan"
         android:name="cash.z.ecc.android.ui.scan.ScanFragment"

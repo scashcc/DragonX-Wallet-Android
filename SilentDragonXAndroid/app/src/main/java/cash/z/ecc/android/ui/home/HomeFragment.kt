@@ -20,6 +20,7 @@ import cash.z.ecc.android.ext.Const
 import cash.z.ecc.android.ext.WalletManager
 import cash.z.ecc.android.ext.showSharedLibraryCriticalError
 import cash.z.ecc.android.feedback.Report
+import cash.z.ecc.android.sdk.db.entity.ConfirmedTransaction
 import cash.z.ecc.android.sdk.ext.onFirstWith
 import cash.z.ecc.android.ui.base.BaseFragment
 import cash.z.ecc.android.ui.compose.DragonXTheme
@@ -27,6 +28,7 @@ import cash.z.ecc.android.ui.compose.HomeScreen
 import cash.z.ecc.android.ui.setup.WalletSetupViewModel
 import cash.z.ecc.android.ui.setup.WalletSetupViewModel.WalletSetupState.NO_SEED
 import cash.z.ecc.android.util.twig
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -45,6 +47,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
     private val walletSetup: WalletSetupViewModel by activityViewModels()
     private val viewModel: HomeViewModel by viewModels()
 
+    private val recentTxState = MutableStateFlow<List<ConfirmedTransaction>>(emptyList())
+
     // Only here to satisfy BaseFragment's abstract contract; never inflated (we use Compose instead).
     override fun inflate(inflater: LayoutInflater): FragmentHomeBinding =
         FragmentHomeBinding.inflate(inflater)
@@ -57,6 +61,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         setContent {
             val ui by viewModel.homeState.collectAsState()
+            val recent by recentTxState.collectAsState()
             val nodeHost = remember { currentNodeHost() }
             val walletLabel = remember { currentWalletLabel() }
             DragonXTheme {
@@ -64,6 +69,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
                     state = ui,
                     nodeHost = nodeHost,
                     walletLabel = walletLabel,
+                    recentTx = recent,
                     onSend = { mainActivity?.safeNavigate(R.id.action_nav_home_to_send) },
                     onReceive = { mainActivity?.safeNavigate(R.id.action_nav_home_to_nav_receive) },
                     onConsolidate = { mainActivity?.safeNavigate(R.id.action_nav_home_to_nav_consolidate) },
@@ -133,6 +139,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         viewModel.initializeMaybe()
         viewModel.uiModels
             .onEach { viewModel.homeState.value = it }
+            .launchIn(resumedScope)
+        DependenciesHolder.synchronizer.clearedTransactions
+            .onEach { recentTxState.value = it.filterNotNull() }
             .launchIn(resumedScope)
     }
 }
