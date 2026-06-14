@@ -58,13 +58,28 @@ class ZcashWalletApp : Application(), CameraXConfig.Provider {
         if (BuildConfig.DEBUG) {
             StrictModeHelper.enableStrictMode()
         }
-        if (BuildConfig.DEBUG) {
+        // Persistent sync "diary". Twigs are SILENT by default, so release builds previously logged
+        // nothing at all — a slow/"stuck" sync was undiagnosable (no PC needed: the log survives to a
+        // file that can be pulled later via:
+        //   adb pull /sdcard/Android/data/dragonx.android/files/dragonx-sync.log
+        // We always plant a FileTwig (rotating, size-capped) plus a logcat mirror for live debugging.
+        // This logs the block download/validate/scan steps so we can SEE which batch a slow scan is on
+        // and how long each batch takes. File IO is best-effort and can never crash/stall the engine.
+        runCatching {
+            val logFile = java.io.File(getExternalFilesDir(null) ?: filesDir, "dragonx-sync.log")
+            val fileTwig = cash.z.ecc.android.sdk.internal.FileTwig(logFile)
+            // SDK engine logs (the scan loop lives here — this is what reveals a stuck/slow batch).
             cash.z.ecc.android.sdk.internal.Twig.plant(
                 cash.z.ecc.android.sdk.internal.TroubleshootingTwig(
-                    printer = { android.util.Log.d("@TWIG", it); Unit }
+                    printer = { android.util.Log.i("DRGXSYNC", it); Unit }
+                ) + fileTwig
+            )
+            // App-level logs (processor errors, auto-recovery, uncaught exceptions) -> same file.
+            cash.z.ecc.android.util.Twig.plant(
+                cash.z.ecc.android.util.TroubleshootingTwig(
+                    printer = { android.util.Log.i("DRGXWALLET", it); fileTwig.twig(it, 0); Unit }
                 )
             )
-            cash.z.ecc.android.util.Twig.enabled(true)
         }
 
         // Setup handler for uncaught exceptions.

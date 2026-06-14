@@ -80,8 +80,12 @@ object ZcashSdk {
      * long freeze as a hang ("卡在 90% 不动"). 100 keeps each batch short so the % moves visibly and
      * every batch commits its scan progress (a backgrounded/killed app then loses far less work).
      * Total scan work is essentially unchanged; this trades a little FFI overhead for live progress.
+     * 2026-06-15: lowered 100->25 for heavily-fragmented wallets (hundreds of unspent notes update a
+     * witness *per note per block* near the tip, so even a 100-block batch can take many minutes and
+     * looks frozen). 25 makes the % move + commits progress more often, so a killed/backgrounded app
+     * resumes with far less re-scan and the new file log shows real per-batch timing.
      */
-    val SCAN_BATCH_SIZE = 100
+    val SCAN_BATCH_SIZE = 25
 
     /**
      * Default amount of time, in milliseconds, to poll for new blocks. Typically, this should be about half the average
