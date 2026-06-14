@@ -112,7 +112,13 @@ class WalletSetupViewModel : ViewModel() {
 
         twig("Done loading config variables")
         return Initializer.Config {
-            it.importWallet(vk, birthdayHeight, network, LightWalletEndpoint(host, port, true))
+            it.importWallet(
+                vk,
+                birthdayHeight,
+                network,
+                LightWalletEndpoint(host, port, true),
+                cash.z.ecc.android.ext.WalletManager.activeAlias()
+            )
             it.setOverwriteKeys(overwriteVks)
         }
     }

@@ -23,6 +23,10 @@ object Const {
         const val SERVER_HOST = "const.pref.server_host"
         const val SERVER_PORT = "const.pref.server_port"
         const val STREET_MODE = "const.pref.street_mode"
+
+        // DragonX multi-wallet: number of wallets and the active wallet index.
+        const val WALLET_COUNT = "const.pref.wallet_count"
+        const val WALLET_ACTIVE = "const.pref.wallet_active"
     }
 
     /**

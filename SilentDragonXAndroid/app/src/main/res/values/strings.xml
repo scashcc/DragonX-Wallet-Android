@@ -18,6 +18,9 @@
     <!-- Consolidate small notes (合并零钱) -->
     <string name="profile_consolidate">合并零钱 Consolidate</string>
     <string name="profile_node">选择节点 Choose node</string>
+    <string name="profile_wallets">钱包 / 切换 Wallets</string>
+    <string name="wallet_new">＋ 新建钱包 New wallet</string>
+    <string name="wallet_new_warning">将生成一个全新钱包（新的 24 词助记词、独立地址与独立同步数据）。\n\n⚠️ 重要：请先在「没有资金」的新钱包上测试切换功能，确认无误后再往里转入资金；新钱包请务必到「我的 → 备份助记词」备份它自己的 24 个词。\n\n你当前钱包不受影响，可随时切回。</string>
     <string name="consolidate_title">合并零钱 Consolidate</string>
     <string name="consolidate_explanation">如果你收到过很多笔小额转入（例如矿池打款），钱包里会积累成百上千个“零钱”碎片。转大额时，钱包要把几百个碎片塞进一笔交易，体积过大会被矿工拒绝打包，最终超时失败。\n\n点击下方按钮，钱包会全自动把这些零钱合并成几个大额，无需你逐笔操作。合并笔数会根据你的零钱数量自动决定。完成并确认后，就能正常转出大额了。\n\nIf your wallet received many small payments, it holds hundreds of tiny notes. This automatically merges them into a few large ones so you can send normally again.</string>
     <string name="consolidate_fee_note">每合并一笔需支付网络手续费 0.0001 DRGX（DragonX 节点对隐私交易要求的最低手续费）。\nA network fee of 0.0001 DRGX applies per consolidation transaction.</string>

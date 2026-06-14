@@ -58,7 +58,13 @@ object DependenciesHolder {
         if (extfvk != null && extpub != null) {
             val vk = UnifiedViewingKey(extfvk = String(extfvk), extpub = String(extpub))
             initializerComponent.createInitializer(Initializer.Config {
-                it.importWallet(vk, birthdayHeight, network, LightWalletEndpoint(host, port, true))
+                it.importWallet(
+                    vk,
+                    birthdayHeight,
+                    network,
+                    LightWalletEndpoint(host, port, true),
+                    cash.z.ecc.android.ext.WalletManager.activeAlias()
+                )
             })
         }
     }

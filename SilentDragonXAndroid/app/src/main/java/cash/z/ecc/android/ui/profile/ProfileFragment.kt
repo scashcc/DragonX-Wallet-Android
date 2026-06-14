@@ -8,7 +8,9 @@ import android.view.View
 import android.widget.Toast
 import androidx.core.content.FileProvider.getUriForFile
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import cash.z.ecc.android.BuildConfig
 import cash.z.ecc.android.R
 import cash.z.ecc.android.ZcashWalletApp
@@ -70,6 +72,9 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
             // DragonX: an always-available, latency-checked node list (switches without restart),
             // instead of one that only pops up when the connection fails.
             mainActivity?.showServerPickerDialog(userInitiated = true)
+        }
+        binding.buttonWallets.setOnClickListener {
+            onWalletManager()
         }
         binding.buttonRescan.setOnClickListener {
             tapped(PROFILE_RESCAN)
@@ -220,6 +225,67 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
             viewModel.wipe()
             mainActivity?.restartApp()
         }
+    }
+
+    /**
+     * DragonX multi-wallet: lists wallets (● = active), lets the user switch, or create a new one.
+     * Switching/creating copies the chosen wallet's keys into the active slot and rebuilds the
+     * synchronizer against that wallet's own database (see [cash.z.ecc.android.ext.WalletManager]).
+     */
+    private fun onWalletManager() {
+        WalletManager.migrateIfNeeded()
+        val wallets = WalletManager.list()
+        val items = (
+            wallets.map { (if (it.isActive) "● " else "") + it.label } +
+                getString(R.string.wallet_new)
+            ).toTypedArray()
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(getString(R.string.profile_wallets))
+            .setItems(items) { _, which ->
+                if (which < wallets.size) {
+                    val w = wallets[which]
+                    if (!w.isActive) {
+                        // Restart for a guaranteed-clean reload of the switched wallet (mirrors the
+                        // wipe/rescan flow), avoiding any stale observers of the old synchronizer.
+                        WalletManager.switchTo(w.index)
+                        mainActivity?.restartApp()
+                    }
+                } else {
+                    promptNewWallet()
+                }
+            }
+            .setNegativeButton("关闭 Close", null)
+            .show()
+    }
+
+    private fun promptNewWallet() {
+        val input = android.widget.EditText(requireContext()).apply {
+            setText("钱包 ${WalletManager.count() + 1}")
+        }
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle(getString(R.string.wallet_new))
+            .setMessage(getString(R.string.wallet_new_warning))
+            .setView(input)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val label = input.text.toString().ifBlank { "钱包 ${WalletManager.count() + 1}" }
+                viewLifecycleOwner.lifecycleScope.launch {
+                    try {
+                        WalletManager.createWallet(label)
+                        mainActivity?.showConfirmation(
+                            "✅ 新钱包已创建",
+                            "已切换到「$label」。\n\n⚠️ 请在重启后立即到「我的 → 备份助记词」备份这个新钱包自己的 24 个助记词，否则一旦丢失将无法找回。",
+                            "好，重启加载"
+                        ) { mainActivity?.restartApp() }
+                    } catch (t: Throwable) {
+                        mainActivity?.showCriticalMessage(
+                            "新建钱包失败 Create failed",
+                            t.message ?: t.toString()
+                        )
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun onRescanWallet() {
