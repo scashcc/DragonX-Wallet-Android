@@ -8,8 +8,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import cash.z.ecc.android.R
 import cash.z.ecc.android.di.DependenciesHolder
 import cash.z.ecc.android.ext.WalletManager
 import cash.z.ecc.android.ext.showCriticalMessage
@@ -50,6 +52,19 @@ class WalletManagerFragment : Fragment() {
                         busyText = txt,
                         onSwitch = { i -> doSwitch(i) },
                         onCreate = { label -> createWallet(label) },
+                        // Reuse the existing restore screens, but in "create a new wallet slot" mode
+                        // (createNewWallet=true) so they add a wallet instead of importing into the
+                        // single active wallet.
+                        onRestoreSeed = {
+                            (activity as? MainActivity)?.navController?.navigate(
+                                R.id.nav_restore, bundleOf("createNewWallet" to true)
+                            )
+                        },
+                        onRestorePrivateKey = {
+                            (activity as? MainActivity)?.navController?.navigate(
+                                R.id.nav_pk_restore, bundleOf("createNewWallet" to true)
+                            )
+                        },
                         onBack = { (activity as? MainActivity)?.navController?.popBackStack() },
                     )
                 }

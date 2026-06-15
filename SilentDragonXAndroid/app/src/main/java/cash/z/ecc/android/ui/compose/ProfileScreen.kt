@@ -1,6 +1,7 @@
 package cash.z.ecc.android.ui.compose
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,7 +23,9 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -43,6 +46,8 @@ fun ProfileScreen(
     walletLabel: String,
     address: String,
     version: String,
+    latestVersion: String?,
+    hasUpdate: Boolean,
     backgroundSyncEnabled: Boolean,
     onToggleBackgroundSync: (Boolean) -> Unit,
     onBack: () -> Unit,
@@ -52,6 +57,9 @@ fun ProfileScreen(
     onChooseNode: () -> Unit,
     onConsolidate: () -> Unit,
     onRescan: () -> Unit,
+    onCheckUpdate: () -> Unit,
+    onOpenReleasePage: () -> Unit,
+    onDownloadApk: () -> Unit,
 ) {
     GradientBackground {
         Column(
@@ -106,13 +114,82 @@ fun ProfileScreen(
             }
 
             Spacer(Modifier.height(26.dp))
-            Text(
-                "DragonX Wallet v$version",
-                color = TextDim,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
+            UpdateFooter(
+                version = version,
+                latestVersion = latestVersion,
+                hasUpdate = hasUpdate,
+                onCheckUpdate = onCheckUpdate,
+                onOpenReleasePage = onOpenReleasePage,
+                onDownloadApk = onDownloadApk,
             )
+        }
+    }
+}
+
+/**
+ * Bottom-of-settings version line + reminder-only update affordance. Shows current vs latest; when a
+ * newer build exists it offers "在线更新" (open the release page) and "下载 APK" (direct link). Nothing
+ * downloads/installs automatically — the user decides.
+ */
+@Composable
+private fun UpdateFooter(
+    version: String,
+    latestVersion: String?,
+    hasUpdate: Boolean,
+    onCheckUpdate: () -> Unit,
+    onOpenReleasePage: () -> Unit,
+    onDownloadApk: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            "DragonX Wallet · 当前版本 v$version",
+            color = TextDim,
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(8.dp))
+        when {
+            latestVersion == null -> {
+                // Not checked yet, or the check failed (e.g. api.github.com unreachable).
+                Surface(
+                    onClick = onCheckUpdate,
+                    shape = RoundedCornerShape(10.dp),
+                    color = SurfaceCard,
+                ) {
+                    Text(
+                        "点击检查更新",
+                        color = DragonXGreen,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+            }
+            hasUpdate -> {
+                Text(
+                    "发现新版本 v$latestVersion",
+                    color = WarnAmber,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = onOpenReleasePage) { Text("在线更新", fontSize = 14.sp) }
+                    Button(onClick = onDownloadApk) { Text("下载 APK", fontSize = 14.sp) }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "下载后请手动安装覆盖更新，助记词不受影响。",
+                    color = TextDim,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            else -> {
+                Text("已是最新版本 ✓ (v$latestVersion)", color = PositiveGreen, fontSize = 13.sp)
+            }
         }
     }
 }

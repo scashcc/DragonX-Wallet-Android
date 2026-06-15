@@ -63,6 +63,9 @@ object WalletManager {
     private fun saveActiveInto(i: Int, label: String, alias: String) {
         box.getBytes(Const.Backup.SEED)?.let { box.setBytes(k(i, "seed"), it) }
         box.getCharsUtf8(Const.Backup.SEED_PHRASE)?.let { box[k(i, "seed_phrase")] = it }
+        // Private-key-restored wallets have no seed; their spending key lives here. Mirror it too so a
+        // private-key wallet can be registered as a slot and switched back to.
+        box.getCharsUtf8(Const.Backup.SPENDING_KEY)?.let { box[k(i, "spending_key")] = String(it) }
         box.getCharsUtf8(Const.Backup.VIEWING_KEY)?.let { box[k(i, "vk")] = String(it) }
         box.getCharsUtf8(Const.Backup.PUBLIC_KEY)?.let { box[k(i, "pub")] = String(it) }
         box.get<Int>(Const.Backup.BIRTHDAY_HEIGHT)?.let { box[k(i, "birthday")] = it }
@@ -72,15 +75,30 @@ object WalletManager {
 
     /** Load slot [i]'s keys into the live [Const.Backup] keys (making it the active wallet). */
     private fun loadIntoActive(i: Int) {
-        box.getBytes(k(i, "seed"))?.let { box.setBytes(Const.Backup.SEED, it) }
-        box.getCharsUtf8(k(i, "seed_phrase"))?.let {
-            box[Const.Backup.SEED_PHRASE] = it
-            box[Const.Backup.HAS_SEED_PHRASE] = true
-        }
+        // CLEAR all live key material first. Critical for funds safety: a slot may be a seed wallet
+        // OR a private-key wallet. Without clearing, switching from a seed wallet to a private-key
+        // wallet (or vice-versa) would leave the PREVIOUS wallet's SEED/SPENDING_KEY behind, and
+        // Keys.activeSpendingKey would then sign with the WRONG key. We set exactly the target slot's
+        // fields below.
+        box.delete(Const.Backup.SEED)
+        box.delete(Const.Backup.SEED_PHRASE)
+        box.delete(Const.Backup.SPENDING_KEY)
+        box.delete(Const.Backup.VIEWING_KEY)
+        box.delete(Const.Backup.PUBLIC_KEY)
+
+        val seed = box.getBytes(k(i, "seed"))
+        val seedPhrase = box.getCharsUtf8(k(i, "seed_phrase"))
+        seed?.let { box.setBytes(Const.Backup.SEED, it) }
+        seedPhrase?.let { box[Const.Backup.SEED_PHRASE] = it }
+        box.getCharsUtf8(k(i, "spending_key"))?.let { box[Const.Backup.SPENDING_KEY] = String(it) }
         box.getCharsUtf8(k(i, "vk"))?.let { box[Const.Backup.VIEWING_KEY] = String(it) }
         box.getCharsUtf8(k(i, "pub"))?.let { box[Const.Backup.PUBLIC_KEY] = String(it) }
         box.get<Int>(k(i, "birthday"))?.let { box[Const.Backup.BIRTHDAY_HEIGHT] = it }
-        box[Const.Backup.HAS_SEED] = true
+        // Derive the flags from what the slot actually has (robust for legacy slots saved before the
+        // spending_key/flag fields existed: a seed present => seed wallet).
+        box[Const.Backup.HAS_SEED] = (seed != null)
+        box[Const.Backup.HAS_SEED_PHRASE] = (seedPhrase != null)
+        box[Const.Backup.HAS_BACKUP] = true
     }
 
     /** Switch the active wallet to slot [i] and rebuild the synchronizer for its database. */
@@ -109,6 +127,60 @@ object WalletManager {
         box[k(i, "seed_phrase")] = phrase
         box[k(i, "vk")] = vk.extfvk
         box[k(i, "pub")] = vk.extpub
+        box[k(i, "birthday")] = birthday.value.toInt()
+        box[k(i, "label")] = label.toCharArray()
+        box[k(i, "alias")] = alias.toCharArray()
+        box[Const.Pref.WALLET_COUNT] = i + 1
+
+        switchTo(i)
+        return i
+    }
+
+    /**
+     * Restore an EXISTING wallet from a 24-word seed phrase as a NEW slot (its own database via a
+     * fresh alias) and switch to it. The phrase must already be validated by the caller. Returns its
+     * index. Existing wallets are untouched.
+     */
+    suspend fun restoreFromSeed(label: String, seedPhrase: String, birthday: BlockHeight): Int {
+        migrateIfNeeded()
+        val network = ZcashWalletApp.instance.defaultNetwork
+        val i = count()
+        val mnemonics = DependenciesHolder.mnemonics
+        val phraseChars = seedPhrase.trim().toCharArray()
+        val seed = mnemonics.toSeed(phraseChars)
+        val vk = DerivationTool.deriveUnifiedViewingKeys(seed, network)[0]
+        val alias = "wallet_$i"
+
+        box.setBytes(k(i, "seed"), seed)
+        box[k(i, "seed_phrase")] = phraseChars
+        box[k(i, "vk")] = vk.extfvk
+        box[k(i, "pub")] = vk.extpub
+        box[k(i, "birthday")] = birthday.value.toInt()
+        box[k(i, "label")] = label.toCharArray()
+        box[k(i, "alias")] = alias.toCharArray()
+        box[Const.Pref.WALLET_COUNT] = i + 1
+
+        switchTo(i)
+        return i
+    }
+
+    /**
+     * Restore an EXISTING wallet from a Sapling spending key (secret-extended-key-main…) as a NEW
+     * slot and switch to it. The viewing key is derived from (and thereby validates) the spending
+     * key; a bad key throws. There is no seed/transparent component, so a placeholder extpub is
+     * stored (see [Keys]). Returns its index. Existing wallets are untouched.
+     */
+    suspend fun restoreFromSpendingKey(label: String, spendingKey: String, birthday: BlockHeight): Int {
+        migrateIfNeeded()
+        val network = ZcashWalletApp.instance.defaultNetwork
+        val key = spendingKey.trim()
+        val i = count()
+        val extfvk = DerivationTool.deriveViewingKey(key, network) // validates the key; throws if bad
+        val alias = "wallet_$i"
+
+        box[k(i, "spending_key")] = key.toCharArray()
+        box[k(i, "vk")] = extfvk
+        box[k(i, "pub")] = Keys.PLACEHOLDER_EXTPUB
         box[k(i, "birthday")] = birthday.value.toInt()
         box[k(i, "label")] = label.toCharArray()
         box[k(i, "alias")] = alias.toCharArray()

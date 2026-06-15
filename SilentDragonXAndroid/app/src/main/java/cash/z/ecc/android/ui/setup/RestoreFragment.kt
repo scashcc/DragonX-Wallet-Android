@@ -14,6 +14,8 @@ import androidx.lifecycle.lifecycleScope
 import cash.z.ecc.android.R
 import cash.z.ecc.android.ZcashWalletApp
 import cash.z.ecc.android.databinding.FragmentRestoreBinding
+import cash.z.ecc.android.di.DependenciesHolder
+import cash.z.ecc.android.ext.WalletManager
 import cash.z.ecc.android.ext.showSharedLibraryCriticalError
 import cash.z.ecc.android.feedback.Report
 import cash.z.ecc.android.sdk.model.BlockHeight
@@ -21,8 +23,10 @@ import cash.z.ecc.android.ui.base.BaseFragment
 import cash.z.ecc.android.ui.compose.DragonXTheme
 import cash.z.ecc.android.ui.compose.RestoreScreen
 import com.tylersuehr.chips.Chip
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Restore-from-seed (Compose). The 24 words are entered in a 4×6 grid of independent numbered cells
@@ -36,6 +40,10 @@ class RestoreFragment : BaseFragment<FragmentRestoreBinding>() {
     private val busy = MutableStateFlow(false)
     private val error = MutableStateFlow<String?>(null)
     private val latestHeight = MutableStateFlow(0L)
+
+    // When launched from the wallet manager (multi-wallet), restore into a NEW wallet slot instead of
+    // importing into the single active wallet. Defaults to false (first-launch onboarding flow).
+    private val createNewWallet: Boolean by lazy { arguments?.getBoolean("createNewWallet", false) ?: false }
 
     override fun inflate(inflater: LayoutInflater): FragmentRestoreBinding =
         FragmentRestoreBinding.inflate(inflater)
@@ -93,12 +101,23 @@ class RestoreFragment : BaseFragment<FragmentRestoreBinding>() {
         busy.value = true
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                walletSetup.importWallet(
-                    seedPhrase,
-                    BlockHeight.new(ZcashWalletApp.instance.defaultNetwork, birthday)
-                )
-                mainActivity?.startSync()
-                mainActivity?.safeNavigate(R.id.action_nav_restore_to_nav_home)
+                val network = ZcashWalletApp.instance.defaultNetwork
+                if (createNewWallet) {
+                    // Add as a new wallet slot, then restart for a clean reload (same as create/switch).
+                    withContext(Dispatchers.IO) {
+                        runCatching { DependenciesHolder.synchronizer.stop() }
+                        WalletManager.restoreFromSeed(
+                            label = "钱包 ${WalletManager.count() + 1}",
+                            seedPhrase = seedPhrase,
+                            birthday = BlockHeight.new(network, birthday),
+                        )
+                    }
+                    mainActivity?.restartApp()
+                } else {
+                    walletSetup.importWallet(seedPhrase, BlockHeight.new(network, birthday))
+                    mainActivity?.startSync()
+                    mainActivity?.safeNavigate(R.id.action_nav_restore_to_nav_home)
+                }
             } catch (e: UnsatisfiedLinkError) {
                 busy.value = false
                 mainActivity?.showSharedLibraryCriticalError(e)

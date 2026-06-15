@@ -18,7 +18,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,11 +80,11 @@ fun LandingScreen(
                     onClick = onRestoreSeed,
                     modifier = Modifier.fillMaxWidth().height(54.dp),
                 ) { Text("用助记词恢复 (24 词)", fontSize = 15.sp) }
-                Spacer(Modifier.height(10.dp))
-                TextButton(
+                Spacer(Modifier.height(12.dp))
+                OutlinedButton(
                     onClick = onRestorePrivateKey,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("用私钥恢复 (secret-extended-key)", color = TextSecondary, fontSize = 14.sp) }
+                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                ) { Text("用私钥恢复 (secret-extended-key)", fontSize = 15.sp) }
             }
         }
     }

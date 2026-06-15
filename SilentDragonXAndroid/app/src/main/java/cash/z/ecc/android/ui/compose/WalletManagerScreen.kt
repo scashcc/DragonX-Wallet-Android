@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,6 +38,8 @@ fun WalletManagerScreen(
     busyText: String,
     onSwitch: (Int) -> Unit,
     onCreate: (String) -> Unit,
+    onRestoreSeed: () -> Unit,
+    onRestorePrivateKey: () -> Unit,
     onBack: () -> Unit,
 ) {
     var showNew by remember { mutableStateOf(false) }
@@ -98,8 +101,26 @@ fun WalletManagerScreen(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) { Text("＋ 新建钱包", fontSize = 16.sp) }
             Spacer(Modifier.height(12.dp))
+
+            // Restore EXISTING wallets as additional slots. Previously the only way to restore was the
+            // first-launch landing page, which is unreachable once a wallet exists — so a user with
+            // multiple wallets had no way to add a restored one.
+            Text("恢复已有钱包", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onRestoreSeed,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) { Text("用助记词恢复 (24 词)", fontSize = 15.sp) }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = onRestorePrivateKey,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+            ) { Text("用私钥恢复 (secret-extended-key)", fontSize = 15.sp) }
+
+            Spacer(Modifier.height(14.dp))
             Text(
-                "⚠️ 新建后请立即到「我的 → 备份助记词」备份它专属的 24 个助记词；建议先用空钱包测试切换。",
+                "⚠️ 新建后请立即到「我的 → 备份助记词」备份它专属的 24 个助记词；建议先用空钱包测试切换。" +
+                    "\n恢复会作为一个新钱包加入列表，并自动切换过去，不影响现有钱包。",
                 color = TextDim, fontSize = 12.sp,
             )
         }

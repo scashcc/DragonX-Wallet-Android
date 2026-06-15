@@ -1,5 +1,7 @@
 package cash.z.ecc.android.ui.profile
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -41,6 +43,13 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
     private val labelState = MutableStateFlow("钱包 1 Wallet 1")
     private val bgSyncState = MutableStateFlow(true)
 
+    // Update check (reminder-only): latest version + whether it's newer than this build.
+    private val latestVersionState = MutableStateFlow<String?>(null)
+    private val hasUpdateState = MutableStateFlow(false)
+    @Volatile private var updateDownloadUrl: String? = null
+    @Volatile private var updatePageUrl: String = UpdateChecker.RELEASES_PAGE
+    @Volatile private var updateChecked = false
+
     // Only to satisfy BaseFragment's abstract contract; never inflated (we render Compose instead).
     override fun inflate(inflater: LayoutInflater): FragmentProfileBinding =
         FragmentProfileBinding.inflate(inflater)
@@ -56,11 +65,15 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
             val addr by addressState.collectAsState()
             val label by labelState.collectAsState()
             val bgSync by bgSyncState.collectAsState()
+            val latest by latestVersionState.collectAsState()
+            val hasUpdate by hasUpdateState.collectAsState()
             DragonXTheme {
                 ProfileScreen(
                     walletLabel = label,
                     address = addr,
                     version = BuildConfig.VERSION_NAME,
+                    latestVersion = latest,
+                    hasUpdate = hasUpdate,
                     backgroundSyncEnabled = bgSync,
                     onToggleBackgroundSync = { enabled ->
                         BackgroundSyncManager.setEnabled(requireContext(), enabled)
@@ -77,6 +90,9 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                     onChooseNode = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_node) },
                     onConsolidate = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_consolidate) },
                     onRescan = { mainActivity?.safeNavigate(R.id.action_nav_profile_to_nav_rescan) },
+                    onCheckUpdate = { runUpdateCheck() },
+                    onOpenReleasePage = { openUrl(updatePageUrl) },
+                    onDownloadApk = { openUrl(updateDownloadUrl ?: updatePageUrl) },
                 )
             }
         }
@@ -91,6 +107,29 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
             } catch (t: Throwable) {
                 "—"
             }
+        }
+        // Check for a newer build once per visit. Reminder-only; never auto-downloads/installs.
+        if (!updateChecked) {
+            updateChecked = true
+            runUpdateCheck()
+        }
+    }
+
+    private fun runUpdateCheck() {
+        resumedScope.launch {
+            val result = UpdateChecker.check(BuildConfig.VERSION_NAME)
+            updateDownloadUrl = result.downloadUrl
+            updatePageUrl = result.pageUrl
+            latestVersionState.value = result.latestVersion
+            hasUpdateState.value = result.hasUpdate
+        }
+    }
+
+    private fun openUrl(url: String) {
+        runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        }.onFailure {
+            mainActivity?.showSnackbar("无法打开链接，请手动访问：$url")
         }
     }
 
