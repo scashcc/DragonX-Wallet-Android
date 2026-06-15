@@ -31,8 +31,10 @@ import cash.z.ecc.android.ui.setup.WalletSetupViewModel.WalletSetupState.NO_SEED
 import cash.z.ecc.android.util.twig
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 
 /**
@@ -160,7 +162,18 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
                 if (status == Synchronizer.Status.SYNCED) {
                     if (recentTxJob == null) {
                         recentTxJob = DependenciesHolder.synchronizer.clearedTransactions
-                            .onEach { recentTxState.value = it.filterNotNull() }
+                            .map { it.filterNotNull() }
+                            .distinctUntilChanged()
+                            .onEach { list ->
+                                // De-flicker: a periodic sync refresh (~every 18s) re-queries this
+                                // PagedList and can briefly emit an EMPTY list before refilling, which
+                                // made the "最近交易" card blank-and-refill (the flicker the user saw).
+                                // Don't let a transient empty overwrite real content; only show empty
+                                // when the wallet genuinely has no transactions.
+                                if (list.isNotEmpty() || recentTxState.value.isEmpty()) {
+                                    recentTxState.value = list
+                                }
+                            }
                             .launchIn(resumedScope)
                     }
                 } else {

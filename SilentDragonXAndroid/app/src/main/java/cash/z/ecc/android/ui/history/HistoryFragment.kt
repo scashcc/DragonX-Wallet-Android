@@ -21,7 +21,9 @@ import cash.z.ecc.android.ui.compose.DragonXTheme
 import cash.z.ecc.android.ui.compose.HistoryScreen
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 
 /**
@@ -77,9 +79,17 @@ class HistoryFragment : BaseFragment<FragmentHistoryBinding>() {
             syncedState.value = synced
             if (synced) {
                 if (txJob == null) {
-                    // filterNotNull guards against PagedList placeholder nulls.
+                    // filterNotNull guards against PagedList placeholder nulls; the empty-guard +
+                    // distinctUntilChanged stop the list blanking-and-refilling (flicker) when a
+                    // periodic sync refresh re-queries the PagedList.
                     txJob = viewModel.transactions
-                        .onEach { txState.value = it.filterNotNull() }
+                        .map { it.filterNotNull() }
+                        .distinctUntilChanged()
+                        .onEach { list ->
+                            if (list.isNotEmpty() || txState.value.isEmpty()) {
+                                txState.value = list
+                            }
+                        }
                         .launchIn(resumedScope)
                 }
             } else {
