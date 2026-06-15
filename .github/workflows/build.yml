@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.5.4-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.5.5-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,10 +130,11 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.5.4 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.5.5 (build #${{ github.run_number }})
 
             【本次更新】
-            • 【体验】修掉「最近交易/交易记录每隔十几秒闪一下」。原因:钱包每 18 秒探一次新块,刷新交易列表时会瞬间清空再填回来,看着就是一闪。改为:刷新时不再清空(只在真有内容变化时才重画、且不让瞬时空列表盖掉已有内容)。同步本身完全正常,这纯是视觉优化、零风险。
+            • 【体验·彻底修掉闪烁】v1.5.4 只修了一半,这版根治「最近交易/交易记录每隔几十秒闪一下」。真因(adb+手术刀级代码定位):钱包每出一个新块,内核状态就会瞬间从「已同步」掉到「下载/扫描中」再回到「已同步」;而首页「最近交易」卡片和历史页是死盯这个**原始状态**的——状态一掉,代码就把交易列表**清空**,卡片立刻从「交易行」翻成「查看交易记录」入口、再翻回来,这就是那一闪。余额卡片其实早有「距链顶 100 块内都算已同步」的防抖、所以它不闪;这次把交易列表也改用**同一套 100 块防抖**,并且**任何瞬时掉线都不再清空列表**(只有真的落后链顶 100 块以上的大重扫才停止刷新、且仍保留已显示内容)。出新块时只更新区块号和余额,列表纹丝不动。纯 UI、零风险。
+            • (并入 v1.5.4)交易列表刷新去抖:只在内容真变化时重画,不让瞬时空列表盖掉已有内容。
             • 【根治·最关键 2/2】修复「点交易记录 → 又从头同步、余额归 0」。靠 adb 日记定位:扫完后查看交易记录时,列表会随扫描器写入不停重算,造成数据库瞬时"被锁",SQLite 此时会**误报** `database disk image is malformed`(这其实是锁、不是真损坏——SDK 源码自己都注释说这是"false positive")。而旧逻辑一看到 malformed 就**立刻清空整个区块库重扫**,于是一锁就清、一清就半小时、再锁再清……死循环,余额永远 0。修法:malformed 不再"见一次就清库",改为**先让扫描器自动重试**,只有在**连续多次、确实持续**才判定真损坏才清库(并在扫描有进展时立即清零计数)。配合 v1.5.2 的见证修复,两个会把库搞坏/触发重扫的元凶就都堵死了。**装上后点交易记录不会再把钱包重置了。**
             • (并入 v1.5.2)见证表插入改 INSERT OR IGNORE,根治 `UNIQUE constraint failed: sapling_witnesses` 扫描崩。
             • 【根治·最关键】修复「动不动就从头重新同步、余额一直显示 0」的死循环根因。靠 adb 拉手机同步日志实锤:扫描时 Rust 报 `UNIQUE constraint failed: sapling_witnesses.note, sapling_witnesses.block`——见证表对 (note, block) 有唯一约束,而插入用的是普通 INSERT,**任何一次回退/重扫重新扫到已扫过的块,就会插入重复见证→报错(FailedScan)→App 把整个区块库清空→从生日检查点(3,050,000)重新扫→扫到那个块又冲突→无限循环**,余额自然一直归 0。修法:见证插入改为 `INSERT OR IGNORE`(同一 note+block 的见证是确定值,重复即相同,忽略即可),扫描从此幂等、不再因重复见证崩。这是真正卡你同步的元凶。⚠️装上后让它把这一轮重扫**安安静静走完一次**(插电、别乱点、开后台同步),扫完余额就会回来。

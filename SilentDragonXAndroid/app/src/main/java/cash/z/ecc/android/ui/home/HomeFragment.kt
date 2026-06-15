@@ -31,6 +31,7 @@ import cash.z.ecc.android.ui.setup.WalletSetupViewModel.WalletSetupState.NO_SEED
 import cash.z.ecc.android.util.twig
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
@@ -157,19 +158,39 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         // thousands of times) that ANRs and kills the app mid-scan, losing progress. While syncing
         // the home shows its sync status instead of recent transactions.
         statusJob?.cancel()
-        statusJob = DependenciesHolder.synchronizer.status
-            .onEach { status ->
-                if (status == Synchronizer.Status.SYNCED) {
+        // Gate the recent-tx PagedList subscription on the SAME 100-block hysteresis the balance card
+        // uses (HomeViewModel.isEffectivelySynced). The raw status dips SYNCED->DOWNLOADING->SYNCED on
+        // EVERY new block (~tens of seconds for DragonX); gating on raw status — and clearing the list
+        // in the else branch — made the "最近交易" card swap rows<->entry-card every block. That was the
+        // residual flicker (v1.5.4 only fixed the within-SYNCED empty re-query). While we're within 100
+        // blocks of the tip the scanner is only doing trivial 1-2 block catch-ups (no invalidation
+        // storm), so it's safe to keep the subscription up and the list shown. Only when we fall
+        // genuinely behind (a real heavy resync) do we tear it down — and even then we keep the last
+        // list visible (never blank it).
+        statusJob = combine(
+            DependenciesHolder.synchronizer.status,
+            DependenciesHolder.synchronizer.processorInfo
+        ) { status, info ->
+            if (status == Synchronizer.Status.SYNCED) {
+                true
+            } else {
+                val scanned = info.lastScannedHeight?.value
+                val tip = info.networkBlockHeight?.value
+                scanned != null && tip != null && tip > 0L && (tip - scanned) < 100L
+            }
+        }
+            .distinctUntilChanged()
+            .onEach { effectivelySynced ->
+                if (effectivelySynced) {
                     if (recentTxJob == null) {
                         recentTxJob = DependenciesHolder.synchronizer.clearedTransactions
                             .map { it.filterNotNull() }
                             .distinctUntilChanged()
                             .onEach { list ->
-                                // De-flicker: a periodic sync refresh (~every 18s) re-queries this
-                                // PagedList and can briefly emit an EMPTY list before refilling, which
-                                // made the "最近交易" card blank-and-refill (the flicker the user saw).
-                                // Don't let a transient empty overwrite real content; only show empty
-                                // when the wallet genuinely has no transactions.
+                                // De-flicker: a periodic sync refresh re-queries this PagedList and can
+                                // briefly emit an EMPTY list before refilling. Don't let a transient
+                                // empty overwrite real content; only show empty when the wallet truly
+                                // has no transactions.
                                 if (list.isNotEmpty() || recentTxState.value.isEmpty()) {
                                     recentTxState.value = list
                                 }
@@ -177,9 +198,11 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
                             .launchIn(resumedScope)
                     }
                 } else {
+                    // Real resync (fell >100 blocks behind): stop consuming PagedList updates to dodge
+                    // the invalidation storm, but keep the last transactions on screen — blanking here
+                    // is exactly what caused the flicker.
                     recentTxJob?.cancel()
                     recentTxJob = null
-                    recentTxState.value = emptyList()
                 }
             }
             .launchIn(resumedScope)

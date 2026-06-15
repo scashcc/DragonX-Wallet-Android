@@ -15,12 +15,12 @@ import cash.z.ecc.android.di.DependenciesHolder
 import cash.z.ecc.android.feedback.Report
 import cash.z.ecc.android.sdk.Synchronizer
 import cash.z.ecc.android.sdk.db.entity.ConfirmedTransaction
-import cash.z.ecc.android.sdk.ext.collectWith
 import cash.z.ecc.android.ui.base.BaseFragment
 import cash.z.ecc.android.ui.compose.DragonXTheme
 import cash.z.ecc.android.ui.compose.HistoryScreen
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -68,36 +68,55 @@ class HistoryFragment : BaseFragment<FragmentHistoryBinding>() {
 
     override fun onResume() {
         super.onResume()
-        // Only subscribe to the transaction PagedList once SYNCED. Subscribing while the scanner is
-        // actively writing every batch ignites a Paging DataSource invalidation storm (the
+        // Only subscribe to the transaction PagedList once (effectively) synced. Subscribing while the
+        // scanner is actively writing every batch ignites a Paging DataSource invalidation storm (the
         // ComputableFlow recomputes thousands of times -> "adding an invalidated callback" x1000s),
-        // which ANRs and gets the app killed mid-scan, losing sync progress. When synced the scanner
-        // is idle/polling, so the list is stable and safe to show. While syncing we show the
-        // "同步中，完成后显示" empty state instead.
-        DependenciesHolder.synchronizer.status.collectWith(resumedScope) { status ->
-            val synced = status == Synchronizer.Status.SYNCED
-            syncedState.value = synced
-            if (synced) {
-                if (txJob == null) {
-                    // filterNotNull guards against PagedList placeholder nulls; the empty-guard +
-                    // distinctUntilChanged stop the list blanking-and-refilling (flicker) when a
-                    // periodic sync refresh re-queries the PagedList.
-                    txJob = viewModel.transactions
-                        .map { it.filterNotNull() }
-                        .distinctUntilChanged()
-                        .onEach { list ->
-                            if (list.isNotEmpty() || txState.value.isEmpty()) {
-                                txState.value = list
-                            }
-                        }
-                        .launchIn(resumedScope)
-                }
+        // which ANRs and gets the app killed mid-scan, losing sync progress.
+        //
+        // Gate on the SAME 100-block hysteresis the home/balance card uses (HomeViewModel
+        // .isEffectivelySynced) rather than the raw status: the raw status dips out of SYNCED on EVERY
+        // new block, which made the whole history screen flash the "同步中" placeholder<->list every
+        // block. Within 100 blocks of the tip the scanner is only doing trivial catch-ups (no storm),
+        // so the list is stable and safe to show. Only a genuine heavy resync (>100 behind) tears the
+        // subscription down — and we keep the last list rather than blanking it.
+        combine(
+            DependenciesHolder.synchronizer.status,
+            DependenciesHolder.synchronizer.processorInfo
+        ) { status, info ->
+            if (status == Synchronizer.Status.SYNCED) {
+                true
             } else {
-                txJob?.cancel()
-                txJob = null
-                txState.value = emptyList()
+                val scanned = info.lastScannedHeight?.value
+                val tip = info.networkBlockHeight?.value
+                scanned != null && tip != null && tip > 0L && (tip - scanned) < 100L
             }
         }
+            .distinctUntilChanged()
+            .onEach { synced ->
+                syncedState.value = synced
+                if (synced) {
+                    if (txJob == null) {
+                        // filterNotNull guards against PagedList placeholder nulls; the empty-guard +
+                        // distinctUntilChanged stop the list blanking-and-refilling (flicker) when a
+                        // periodic sync refresh re-queries the PagedList.
+                        txJob = viewModel.transactions
+                            .map { it.filterNotNull() }
+                            .distinctUntilChanged()
+                            .onEach { list ->
+                                if (list.isNotEmpty() || txState.value.isEmpty()) {
+                                    txState.value = list
+                                }
+                            }
+                            .launchIn(resumedScope)
+                    }
+                } else {
+                    // Real resync: stop consuming the PagedList (storm-safe) but keep the last list;
+                    // the "同步中" placeholder shows via syncedState=false anyway.
+                    txJob?.cancel()
+                    txJob = null
+                }
+            }
+            .launchIn(resumedScope)
     }
 
     override fun onPause() {
