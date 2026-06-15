@@ -38,12 +38,15 @@ fun WalletManagerScreen(
     busyText: String,
     onSwitch: (Int) -> Unit,
     onCreate: (String) -> Unit,
+    onRename: (Int, String) -> Unit,
     onRestoreSeed: () -> Unit,
     onRestorePrivateKey: () -> Unit,
     onBack: () -> Unit,
 ) {
     var showNew by remember { mutableStateOf(false) }
     var newLabel by remember { mutableStateOf("钱包 ${wallets.size + 1}") }
+    var renameIndex by remember { mutableStateOf<Int?>(null) }
+    var renameLabel by remember { mutableStateOf("") }
 
     if (busy) {
         GradientBackground {
@@ -81,14 +84,17 @@ fun WalletManagerScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp),
+                        modifier = Modifier.padding(start = 18.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(w.label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { renameIndex = w.index; renameLabel = w.label }) {
+                            Text("改名", color = TextSecondary, fontSize = 13.sp)
+                        }
                         if (w.isActive) {
-                            Text("● 当前", color = DragonXGreen, fontSize = 13.sp)
+                            Text("● 当前", color = DragonXGreen, fontSize = 13.sp, modifier = Modifier.padding(end = 12.dp))
                         } else {
-                            Text("切换 →", color = TextSecondary, fontSize = 13.sp)
+                            Text("切换 →", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(end = 12.dp))
                         }
                     }
                 }
@@ -149,6 +155,33 @@ fun WalletManagerScreen(
                 }) { Text("创建") }
             },
             dismissButton = { TextButton(onClick = { showNew = false }) { Text("取消") } },
+        )
+    }
+
+    val idx = renameIndex
+    if (idx != null) {
+        AlertDialog(
+            onDismissRequest = { renameIndex = null },
+            title = { Text("钱包改名") },
+            text = {
+                Column {
+                    Text("给这个钱包起一个好记的名字（只改显示名称，不影响地址和资金）。", color = TextSecondary, fontSize = 13.sp)
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = renameLabel,
+                        onValueChange = { renameLabel = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRename(idx, renameLabel.ifBlank { "钱包 ${idx + 1}" })
+                    renameIndex = null
+                }) { Text("保存") }
+            },
+            dismissButton = { TextButton(onClick = { renameIndex = null }) { Text("取消") } },
         )
     }
 }

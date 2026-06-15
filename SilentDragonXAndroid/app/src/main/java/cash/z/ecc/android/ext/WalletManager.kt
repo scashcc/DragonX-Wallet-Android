@@ -101,6 +101,12 @@ object WalletManager {
         box[Const.Backup.HAS_BACKUP] = true
     }
 
+    /** Rename slot [i]. Only the display label changes; keys and the database are untouched. */
+    fun rename(i: Int, newLabel: String) {
+        val label = newLabel.trim().ifBlank { "钱包 ${i + 1}" }
+        box[k(i, "label")] = label.toCharArray()
+    }
+
     /** Switch the active wallet to slot [i] and rebuild the synchronizer for its database. */
     fun switchTo(i: Int) {
         if (i == activeIndex()) return

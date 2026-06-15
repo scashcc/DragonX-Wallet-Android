@@ -588,25 +588,28 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
     // consecutive errors; a transient one just lets the scanner back off and retry.
     @Volatile
     private var dbErrorStreak = 0
-    @Volatile
-    private var lastDbErrorMs = 0L
-    private val dbErrorWipeThreshold = 10
+    // Wipe+resync only after this many CONSECUTIVE malformed errors with NO scan progress in between.
+    // The streak is reset to 0 on any successful scan batch (onScanMetricComplete) — so a transient
+    // lock that's interspersed with real progress never accumulates, while a genuinely corrupt DB
+    // (which can't scan a single batch, e.g. a file killed mid-write) accumulates and auto-recovers.
+    // Kept low (4) on purpose: the SDK's retry backoff grows exponentially per consecutive failure
+    // (seconds -> ~10 min), so wiping early recovers in ~1-2 min instead of being stuck in a 10-min
+    // loop forever. (The old version also had a 45s time-based reset, which BACKFIRED: once the
+    // backoff exceeded 45s the streak reset every time and could never reach the threshold -> a
+    // corrupt DB never auto-recovered. Progress-based reset is the correct signal.)
+    private val dbErrorWipeThreshold = 4
 
     private fun onProcessorError(error: Throwable?): Boolean {
-        // "database disk image is malformed" is usually a transient LOCK, not real corruption (see
-        // note above). Only wipe+resync if it keeps happening; otherwise let the scanner retry so a
-        // momentary lock doesn't throw away a half-hour of sync progress. Seed/keys are never touched.
+        // "database disk image is malformed" is OFTEN a transient LOCK, not real corruption (see note
+        // above). Only wipe+resync if it keeps happening with no scan progress; otherwise let the
+        // scanner retry so a momentary lock doesn't throw away sync progress. Seed/keys are never touched.
         if (isDatabaseCorruption(error)) {
-            val now = System.currentTimeMillis()
-            // If it's been quiet for a while, the scanner clearly recovered -> reset the streak.
-            if (now - lastDbErrorMs > 45_000L) dbErrorStreak = 0
-            lastDbErrorMs = now
             dbErrorStreak++
             if (dbErrorStreak < dbErrorWipeThreshold) {
-                twig("transient DB 'malformed' (#$dbErrorStreak/$dbErrorWipeThreshold, likely a lock not corruption); letting the scanner retry instead of wiping. error=$error")
+                twig("DB 'malformed' (#$dbErrorStreak/$dbErrorWipeThreshold, no scan progress yet; could be a lock); letting the scanner retry instead of wiping. error=$error")
                 return true
             }
-            twig("PERSISTENT block-database corruption ($dbErrorStreak in a row); clearing block data and resyncing. error=$error")
+            twig("PERSISTENT block-database corruption ($dbErrorStreak in a row, zero scan progress); clearing block data and resyncing. error=$error")
             dbErrorStreak = 0
             clearBlockDataAndRestart()
             // Return true (rather than false) so the SDK keeps the loop alive briefly instead of

@@ -33,6 +33,11 @@ class WalletManagerFragment : Fragment() {
 
     private val busy = MutableStateFlow(false)
     private val busyText = MutableStateFlow("")
+    private val walletsState = MutableStateFlow<List<WalletItem>>(emptyList())
+
+    private fun reloadWallets() {
+        walletsState.value = WalletManager.list().map { WalletItem(it.index, it.label, it.isActive) }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -40,18 +45,24 @@ class WalletManagerFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         WalletManager.migrateIfNeeded()
+        reloadWallets()
         return ComposeView(requireContext()).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 val isBusy by busy.collectAsState()
                 val txt by busyText.collectAsState()
+                val wallets by walletsState.collectAsState()
                 DragonXTheme {
                     WalletManagerScreen(
-                        wallets = WalletManager.list().map { WalletItem(it.index, it.label, it.isActive) },
+                        wallets = wallets,
                         busy = isBusy,
                         busyText = txt,
                         onSwitch = { i -> doSwitch(i) },
                         onCreate = { label -> createWallet(label) },
+                        onRename = { i, name ->
+                            WalletManager.rename(i, name)
+                            reloadWallets()
+                        },
                         // Reuse the existing restore screens, but in "create a new wallet slot" mode
                         // (createNewWallet=true) so they add a wallet instead of importing into the
                         // single active wallet.
