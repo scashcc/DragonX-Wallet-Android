@@ -279,6 +279,9 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
     }
 
     private fun onScanMetricComplete(batchMetrics: BatchMetrics, isComplete: Boolean) {
+        // The scanner just made progress, so any earlier "malformed" was a transient lock, not real
+        // corruption -> clear the streak so it can never accumulate across a healthy run into a wipe.
+        dbErrorStreak = 0
         val reportingThreshold = 100
         if (isComplete) {
             if (batchMetrics.cumulativeItems > reportingThreshold) {
@@ -576,13 +579,35 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
     // TODO: clean up this error handling
     private var ignoredErrors = 0
     private var reorgCount = 0
+
+    // Hysteresis for "database disk image is malformed". Per the SDK's own note (SdkSynchronizer:504)
+    // this error is VERY OFTEN a false positive caused by transient DB lock contention (the
+    // transaction-list PagedList recomputing while the scanner writes notes), NOT real corruption.
+    // Wiping on the first one nuked all sync progress and, because the lock recurs, looped forever
+    // (resetting the balance to 0). So we only escalate to a wipe when it PERSISTS across many
+    // consecutive errors; a transient one just lets the scanner back off and retry.
+    @Volatile
+    private var dbErrorStreak = 0
+    @Volatile
+    private var lastDbErrorMs = 0L
+    private val dbErrorWipeThreshold = 10
+
     private fun onProcessorError(error: Throwable?): Boolean {
-        // A corrupt block database ("database disk image is malformed") cannot be fixed by
-        // retrying or reopening the wallet -- previously the only fix was a full reinstall. Detect
-        // it and automatically wipe the (re-downloadable) block data and resync. The seed/keys live
-        // in separate secure storage and are NOT touched, so the user keeps their wallet.
+        // "database disk image is malformed" is usually a transient LOCK, not real corruption (see
+        // note above). Only wipe+resync if it keeps happening; otherwise let the scanner retry so a
+        // momentary lock doesn't throw away a half-hour of sync progress. Seed/keys are never touched.
         if (isDatabaseCorruption(error)) {
-            twig("Detected block-database corruption; clearing block data and resyncing. error=$error")
+            val now = System.currentTimeMillis()
+            // If it's been quiet for a while, the scanner clearly recovered -> reset the streak.
+            if (now - lastDbErrorMs > 45_000L) dbErrorStreak = 0
+            lastDbErrorMs = now
+            dbErrorStreak++
+            if (dbErrorStreak < dbErrorWipeThreshold) {
+                twig("transient DB 'malformed' (#$dbErrorStreak/$dbErrorWipeThreshold, likely a lock not corruption); letting the scanner retry instead of wiping. error=$error")
+                return true
+            }
+            twig("PERSISTENT block-database corruption ($dbErrorStreak in a row); clearing block data and resyncing. error=$error")
+            dbErrorStreak = 0
             clearBlockDataAndRestart()
             // Return true (rather than false) so the SDK keeps the loop alive briefly instead of
             // escalating to the "Unrecoverable Error" critical handler -- our recovery coroutine

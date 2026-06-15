@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.5.2-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.5.3-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,11 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.5.2 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.5.3 (build #${{ github.run_number }})
 
             【本次更新】
+            • 【根治·最关键 2/2】修复「点交易记录 → 又从头同步、余额归 0」。靠 adb 日记定位:扫完后查看交易记录时,列表会随扫描器写入不停重算,造成数据库瞬时"被锁",SQLite 此时会**误报** `database disk image is malformed`(这其实是锁、不是真损坏——SDK 源码自己都注释说这是"false positive")。而旧逻辑一看到 malformed 就**立刻清空整个区块库重扫**,于是一锁就清、一清就半小时、再锁再清……死循环,余额永远 0。修法:malformed 不再"见一次就清库",改为**先让扫描器自动重试**,只有在**连续多次、确实持续**才判定真损坏才清库(并在扫描有进展时立即清零计数)。配合 v1.5.2 的见证修复,两个会把库搞坏/触发重扫的元凶就都堵死了。**装上后点交易记录不会再把钱包重置了。**
+            • (并入 v1.5.2)见证表插入改 INSERT OR IGNORE,根治 `UNIQUE constraint failed: sapling_witnesses` 扫描崩。
             • 【根治·最关键】修复「动不动就从头重新同步、余额一直显示 0」的死循环根因。靠 adb 拉手机同步日志实锤:扫描时 Rust 报 `UNIQUE constraint failed: sapling_witnesses.note, sapling_witnesses.block`——见证表对 (note, block) 有唯一约束,而插入用的是普通 INSERT,**任何一次回退/重扫重新扫到已扫过的块,就会插入重复见证→报错(FailedScan)→App 把整个区块库清空→从生日检查点(3,050,000)重新扫→扫到那个块又冲突→无限循环**,余额自然一直归 0。修法:见证插入改为 `INSERT OR IGNORE`(同一 note+block 的见证是确定值,重复即相同,忽略即可),扫描从此幂等、不再因重复见证崩。这是真正卡你同步的元凶。⚠️装上后让它把这一轮重扫**安安静静走完一次**(插电、别乱点、开后台同步),扫完余额就会回来。
             • 【服务器端·关键】修复了节点 lightwalletd **反复崩溃**导致手机同步被掐断的问题(这是和手机端并发损坏并列的另一个"同步老卡/老断"的独立元凶)。原因:DragonX(Hush/Komodo 系)全节点的 RPC 返回结构和 lightwalletd 期望对不齐,源码里对 RPC 字段硬强转,字段缺失(典型:**内存池里还没上链的交易没有 height 字段**)就让整个轻钱包服务器 panic 崩掉,所有连着的手机同步流瞬间全断。已把相关类型断言全部改为安全容错写法并重新编译部署,节点不再因此崩溃。(此项是服务器端修复,装不装新 App 都已生效。)
             • 【App·健壮性】首页:换节点/重启同步时会重复订阅状态流、并可能竞态多启一个最近交易订阅(轻微泄漏)——改为重订阅前先取消旧的。
