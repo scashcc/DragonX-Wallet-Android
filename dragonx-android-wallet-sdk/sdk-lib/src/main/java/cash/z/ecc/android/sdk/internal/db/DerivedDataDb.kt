@@ -420,6 +420,59 @@ interface TransactionDao {
     )
     suspend fun findAllTransactionsByRange(blockRangeStart: Long, blockRangeEnd: Long = blockRangeStart, limit: Int = Int.MAX_VALUE): List<ConfirmedTransaction>
 
+    /**
+     * Find mined transactions that the scanner has recorded but never "enhanced" (their full data
+     * was never downloaded + decrypted). These are detected by `raw IS NULL` while `block IS NOT
+     * NULL`: the compact-block scan inserts a row with only (txid, block, tx_index) and leaves `raw`
+     * NULL; only the enhance step (which downloads the full transaction and decrypts it) ever fills
+     * `raw` in.
+     *
+     * This matters most for OUTBOUND payments. A payment to someone else is encrypted to THEIR key,
+     * so our wallet can only recover the recipient + amount via our outgoing viewing key during the
+     * enhance step. If enhancement failed (e.g. lightwalletd's GetTransaction hiccuped), the spend is
+     * still recorded as a spent note — so the balance is correct — but there is NO row in sent_notes,
+     * which makes the send invisible in history (the change note is is_change=1 and gets filtered
+     * out). Enhance failures are otherwise silently dropped and never retried, so we use this query to
+     * find and re-enhance the gaps once we reach the chain tip.
+     */
+    @Query(
+        """
+        SELECT transactions.id_tx          AS id,
+               transactions.block          AS minedHeight,
+               transactions.tx_index       AS transactionIndex,
+               transactions.txid           AS rawTransactionId,
+               transactions.expiry_height  AS expiryHeight,
+               transactions.raw            AS raw,
+               sent_notes.address          AS toAddress,
+               CASE
+                 WHEN sent_notes.value IS NOT NULL THEN sent_notes.value
+                 ELSE received_notes.value
+               end                         AS value,
+               CASE
+                 WHEN sent_notes.memo IS NOT NULL THEN sent_notes.memo
+                 ELSE received_notes.memo
+               end                         AS memo,
+               CASE
+                 WHEN sent_notes.id_note IS NOT NULL THEN sent_notes.id_note
+                 ELSE received_notes.id_note
+               end                         AS noteId,
+               blocks.time                 AS blockTimeInSeconds
+        FROM   transactions
+               LEFT JOIN received_notes
+                      ON transactions.id_tx = received_notes.tx
+               LEFT JOIN sent_notes
+                      ON transactions.id_tx = sent_notes.tx
+               LEFT JOIN blocks
+                      ON transactions.block = blocks.height
+        WHERE  transactions.block IS NOT NULL
+               AND transactions.raw IS NULL
+        GROUP  BY transactions.id_tx
+        ORDER  BY transactions.block DESC
+        LIMIT  :limit
+        """
+    )
+    suspend fun findUnenhancedTransactions(limit: Int = 1000): List<ConfirmedTransaction>
+
     // Experimental: cleanup cancelled transactions
     //               This should probably be a rust call but there's not a lot of bandwidth for this
     //               work to happen in librustzcash. So prove the concept on our side, first

@@ -86,6 +86,9 @@ internal class PagedTransactionRepository private constructor(
     override suspend fun findNewTransactions(blockHeightRange: ClosedRange<BlockHeight>): List<ConfirmedTransaction> =
         transactions.findAllTransactionsByRange(blockHeightRange.start.value, blockHeightRange.endInclusive.value)
 
+    override suspend fun findUnenhancedTransactions(limit: Int): List<ConfirmedTransaction> =
+        transactions.findUnenhancedTransactions(limit)
+
     override suspend fun findMinedHeight(rawTransactionId: ByteArray) =
         transactions.findMinedHeight(rawTransactionId)?.let { BlockHeight.new(zcashNetwork, it) }
 

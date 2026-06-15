@@ -55,6 +55,16 @@ interface TransactionRepository {
     suspend fun findNewTransactions(blockHeightRange: ClosedRange<BlockHeight>): List<ConfirmedTransaction>
 
     /**
+     * Find mined transactions that were scanned but never enhanced (their full details were never
+     * downloaded). Used to retry enhancement so that outbound payments (recoverable only during the
+     * enhance step, via the outgoing viewing key) don't stay permanently missing from history when a
+     * single GetTransaction call failed during the original sync.
+     *
+     * @return a list of mined transactions whose `raw` data is still missing.
+     */
+    suspend fun findUnenhancedTransactions(limit: Int = 1000): List<ConfirmedTransaction>
+
+    /**
      * Find the mined height that matches the given raw tx_id in bytes. This is useful for matching
      * a pending transaction with one that we've decrypted from the blockchain.
      *

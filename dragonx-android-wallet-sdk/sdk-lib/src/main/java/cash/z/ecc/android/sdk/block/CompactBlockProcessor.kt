@@ -156,6 +156,13 @@ class CompactBlockProcessor internal constructor(
     @Volatile
     internal var currentInfo = ProcessorInfo(null, null, null, null, null)
 
+    // Tracks whether we've already run the "catch-up" enhance pass since last reaching the chain tip.
+    // Enhance failures during a normal sync are silently dropped and never retried, which can leave
+    // outbound payments permanently missing from history (see enhanceUnenhancedTransactions). We run
+    // the catch-up exactly once each time we reach the tip; it is re-armed whenever new blocks arrive.
+    @Volatile
+    private var didReenhanceAtTip = false
+
     /**
      * The zcash network that is being processed. Either Testnet or Mainnet.
      */
@@ -293,9 +300,19 @@ class CompactBlockProcessor internal constructor(
             downloader.lightWalletService.reconnect()
             BlockProcessingResult.Reconnecting
         } else if (currentInfo.lastDownloadRange.isEmpty() && currentInfo.lastScanRange.isEmpty()) {
+            // We're caught up to the tip. Run the catch-up enhance pass exactly once to recover any
+            // transactions whose details failed to download during the original sync (most importantly,
+            // outbound sends that would otherwise be invisible in history). It re-arms when new blocks
+            // arrive, so a transaction that keeps failing is retried on the next sync rather than hammered.
+            if (!didReenhanceAtTip) {
+                enhanceUnenhancedTransactions()
+                didReenhanceAtTip = true
+            }
             setState(Scanned(currentInfo.lastScanRange))
             BlockProcessingResult.NoBlocksToProcess
         } else {
+            // New blocks to process: re-arm the catch-up so it runs again once we reach the tip.
+            didReenhanceAtTip = false
             val error = downloadAndScanPipelined(currentInfo.lastDownloadRange, currentInfo.lastScanRange)
             if (error != BlockProcessingResult.Success) {
                 error
@@ -431,6 +448,41 @@ class CompactBlockProcessor internal constructor(
             BlockProcessingResult.FailedEnhance
         } finally {
             Twig.clip("enhancing")
+        }
+    }
+
+    /**
+     * Re-attempt enhancement for any mined transaction whose full details were never downloaded
+     * (`raw IS NULL`). The normal per-range enhance pass only looks at the most recently scanned
+     * range and silently drops failures, with no retry — so a single failed GetTransaction during the
+     * original sync leaves that transaction un-enhanced forever. Most damagingly, outbound payments
+     * are recovered only during enhancement (via the outgoing viewing key), so a missed enhance makes
+     * the send vanish from history even though the balance correctly dropped. Running this whenever we
+     * reach the chain tip self-heals those gaps (and also fills in any missing memos on receives).
+     */
+    private suspend fun enhanceUnenhancedTransactions() {
+        val pending = try {
+            repository.findUnenhancedTransactions()
+        } catch (t: Throwable) {
+            twig("Warning: could not query un-enhanced transactions due to $t")
+            return
+        }
+        if (pending.isEmpty()) {
+            twig("No previously un-enhanced transactions found; history is complete.")
+            return
+        }
+        Twig.sprout("reenhancing")
+        twig("Found ${pending.size} previously un-enhanced transaction(s); re-enhancing to recover missing sends/memos")
+        setState(Enhancing)
+        try {
+            pending.forEach { transaction ->
+                if (transaction != null) enhance(transaction)
+            }
+            twig("Done re-enhancing previously un-enhanced transactions")
+        } catch (t: Throwable) {
+            twig("Warning: failed during catch-up enhance due to $t")
+        } finally {
+            Twig.clip("reenhancing")
         }
     }
 
