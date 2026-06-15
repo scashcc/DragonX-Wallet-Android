@@ -85,7 +85,8 @@ class SendFragment : Fragment() {
             val error = try {
                 viewModel.validate(requireContext(), availableZatoshi, maxZatoshi).first()
             } catch (t: Throwable) {
-                t.message ?: "校验失败"
+                twig("send validate failed: ${t.stackTraceToString()}")
+                describeError(t)
             }
             if (error != null) {
                 phase.value = SendPhase.Failed(error)
@@ -128,8 +129,11 @@ class SendFragment : Fragment() {
                 }
             }
         } catch (t: Throwable) {
-            twig("send failed: $t")
-            phase.value = SendPhase.Failed(t.message ?: "发送失败")
+            // Log the FULL stack trace to the file log (adb pull .../dragonx-sync.log) so a cryptic
+            // internal crash like "Parameter specified as non-null is null ... <this>" can be
+            // pinpointed to an exact line from a user's report.
+            twig("send failed: ${t.stackTraceToString()}")
+            phase.value = SendPhase.Failed(describeError(t))
         }
     }
 
@@ -139,6 +143,27 @@ class SendFragment : Fragment() {
             "可用余额不足，或零钱太碎导致选不出足够的币——请先到「合并零钱」整理后再转账。"
         } else {
             m
+        }
+    }
+
+    /**
+     * Turn an exception into a message a normal user can act on. Crucially, a Kotlin internal
+     * null-safety crash ("Parameter specified as non-null is null ... checkNotNullParameter") is a
+     * bug, not a funds problem — show that plainly instead of leaking Kotlin internals, and make
+     * clear nothing was spent. (The full stack trace is in the log for diagnosis.)
+     */
+    private fun describeError(t: Throwable): String {
+        val m = t.message ?: ""
+        return when {
+            m.contains("insufficient", ignoreCase = true) ->
+                "可用余额不足，或零钱太碎导致选不出足够的币——请先到「合并零钱」整理后再转账。"
+            t is NullPointerException || m.contains("non-null is null", ignoreCase = true) ||
+                m.contains("checkNotNull", ignoreCase = true) || m.contains("Intrinsics", ignoreCase = true) ->
+                "发送失败：程序内部出错（不是余额问题，你的钱没有动）。\n" +
+                    "请先关掉 App 重新打开再试一次；若仍失败，把这条提示截图发给开发者。"
+            m.contains("param", ignoreCase = true) ->
+                "发送失败：缺少交易所需的参数文件，请重启 App 后重试。"
+            else -> "发送失败：${t.message ?: t.toString()}"
         }
     }
 }

@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.1-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.2-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,9 +130,10 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.6.1 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.6.2 (build #${{ github.run_number }})
 
             【本次更新】
+            • 【转账·健壮性】修复有人反馈转账时弹出一长串看不懂的红字报错(`Parameter specified as non-null is null … checkNotNullParameter`)。这是程序内部的空指针崩溃、**不是余额问题,你的钱不会动**(它在真正花钱之前就中止了)。本版:① 把这类内部错误翻译成人话提示「程序内部出错,钱没动,请重启 App 再试」,不再吓人;② 转账前的统计/埋点调用全部包成"出错也不影响转账"(埋点绝不该挡住转账);③ 转账失败时把**完整错误堆栈写进日志文件**(`adb pull …/dragonx-sync.log`),这样下次谁再遇到,就能精确定位到具体哪一行、彻底修掉。若你或朋友遇到过,升级后再试一次;仍失败请把日志发来。
             • 【根治·关键】修复「同步看着已完成、但余额一直显示『余额更新中』/转出没统计到」。靠 adb 日记实锤:某个钱包的本地区块数据库已损坏(`database disk image is malformed`),扫描每一批都失败,根本扫不动→余额算不出来、转账/收款都统计不全;而首页因为「距链顶 100 块内就算已同步」的显示规则,看着像「已同步」,其实没真正扫完。更糟的是旧的自愈逻辑有个反效果的判定:损坏后内核重试间隔会指数级拉长到约 10 分钟,而旧逻辑「45 秒没出错就清零计数」——一旦重试间隔超过 45 秒,计数每次都被清零、永远到不了阈值→损坏的库永远不会自动修复、卡死。本版改为:**只看「扫描有没有真进展」**来判断是否恢复(有进展才清零),并把自动修复阈值从 10 降到 4——损坏的库会在约 1~2 分钟内自动「清除并重新同步」重建干净(助记词/资金不受影响),而不是无限卡在 10 分钟循环里。⚠️ 你当前若卡在「余额更新中」:切到那个钱包→「我的→重扫钱包→清除并重新同步」手动重建一次最快;装上本版后以后会自动恢复。
             • 【新功能·钱包改名】「我的 → 切换/新建钱包」里每个钱包后面新增「改名」,可给每个钱包起好记的名字(只改显示名称,不影响地址和资金)。
             • 【新功能·多钱包恢复】「我的 → 切换/新建钱包」里新增「用助记词恢复 (24 词)」和「用私钥恢复 (secret-extended-key)」两个按钮。以前只有第一次打开 App(还没有任何钱包时)的引导页才有恢复入口,一旦建好钱包那个页面就再也进不去了——有多个钱包要恢复根本没地方操作。现在随时能把已有钱包作为「新的一个钱包」加进列表,并自动切换过去,不影响现有钱包。

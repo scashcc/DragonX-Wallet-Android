@@ -61,15 +61,17 @@ class SendViewModel : ViewModel() {
     val isShielded get() = toAddress.startsWith("z")
 
     fun send(): Flow<PendingTransaction> {
-        funnel(SendSelected)
+        // Analytics/telemetry must NEVER be able to block a real transaction. Wrap every non-essential
+        // reporting call so a hiccup in the feedback subsystem can't abort the spend.
+        runCatching { funnel(SendSelected) }
         val memoToSend = createMemoToSend()
         // Use the active wallet's spending key: derived from the seed for normal wallets, or the
         // stored private key for private-key-restored wallets (identical result for seed wallets).
         val spendingKey = runBlocking {
             cash.z.ecc.android.ext.Keys.activeSpendingKey(synchronizer.network)
         }
-        funnel(SpendingKeyFound)
-        reportUserInputIssues(memoToSend)
+        runCatching { funnel(SpendingKeyFound) }
+        runCatching { reportUserInputIssues(memoToSend) }
         return synchronizer.sendToAddress(
             spendingKey,
             zatoshiAmount!!,
