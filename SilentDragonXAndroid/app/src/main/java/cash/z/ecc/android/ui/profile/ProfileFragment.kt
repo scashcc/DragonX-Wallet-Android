@@ -136,21 +136,30 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         runCatching {
             val ctx = requireContext()
             val dir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
-            val log = java.io.File(dir, "dragonx-sync.log")
-            if (!log.exists() || log.length() == 0L) {
-                mainActivity?.showSnackbar("暂无日志。请先复现一次问题（例如再点一次转账），再回来导出。")
+            val authority = "${ctx.packageName}.fileprovider"
+
+            // Attach the dedicated crash file FIRST when present — it's what pinpoints a 闪退 — then
+            // the rolling sync log. Sharing both lets a non-technical user hand over everything needed.
+            val files = mutableListOf<java.io.File>()
+            java.io.File(dir, "dragonx-crash.log").let { if (it.exists() && it.length() > 0L) files.add(it) }
+            java.io.File(dir, "dragonx-sync.log").let { if (it.exists() && it.length() > 0L) files.add(it) }
+
+            if (files.isEmpty()) {
+                mainActivity?.showSnackbar("暂无日志。请先复现一次问题（例如再点一次转账/备份），再回来导出。")
                 return@runCatching
             }
-            val uri = androidx.core.content.FileProvider.getUriForFile(
-                ctx,
-                "${ctx.packageName}.fileprovider",
-                log
-            )
-            val share = Intent(Intent.ACTION_SEND).apply {
+
+            val uris = ArrayList(files.map { androidx.core.content.FileProvider.getUriForFile(ctx, authority, it) })
+            val share = (
+                if (uris.size > 1) {
+                    Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                } else {
+                    Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+                }
+                ).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "DragonX 钱包同步日志")
-                putExtra(Intent.EXTRA_TEXT, "DragonX 钱包同步/转账日志（发给开发者排查用）")
+                putExtra(Intent.EXTRA_SUBJECT, "DragonX 钱包日志")
+                putExtra(Intent.EXTRA_TEXT, "DragonX 钱包同步/转账/崩溃日志（发给开发者排查用）")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(Intent.createChooser(share, "分享日志给开发者"))

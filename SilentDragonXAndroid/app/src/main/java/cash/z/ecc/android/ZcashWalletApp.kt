@@ -129,7 +129,24 @@ class ZcashWalletApp : Application(), CameraXConfig.Provider {
     inner class ExceptionReporter(private val ogHandler: Thread.UncaughtExceptionHandler) :
         Thread.UncaughtExceptionHandler {
         override fun uncaughtException(t: Thread?, e: Throwable?) {
-            twig("Uncaught Exception: $e caused by: ${e?.cause}")
+            // Log the FULL stack trace (not just the message) into the sync log, so a user-reported
+            // UI crash — e.g. tapping "备份助记词" — can be pinpointed to an exact file:line straight
+            // from their exported log (我的 → 诊断 → 导出/分享日志), without a PC or adb. Wrapped in
+            // runCatching so diagnostic logging can never itself disturb crash handling. The marker
+            // line makes it trivial to find at the tail of the log.
+            runCatching {
+                twig("===== FATAL UNCAUGHT EXCEPTION on thread '${t?.name}' (${e?.javaClass?.name}) =====")
+                twig("Uncaught Exception:\n${e?.stackTraceToString() ?: "$e"}")
+                // Also persist to a dedicated, never-flooded crash file. The sync log keeps growing
+                // (and rotates at 2MB) once the user reopens the app, which can bury/evict the crash;
+                // this file keeps the last crash intact for the export feature to attach.
+                val crashFile = java.io.File(getExternalFilesDir(null) ?: filesDir, "dragonx-crash.log")
+                val stamp = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+                crashFile.appendText(
+                    "===== CRASH $stamp  v${BuildConfig.VERSION_NAME}  thread='${t?.name}' =====\n" +
+                        "${e?.stackTraceToString() ?: e}\n\n"
+                )
+            }
 
             // A corrupt block/data database ("database disk image is malformed") can be thrown from
             // any path that touches it (the transactions paging query, the scanner, etc.). It cannot

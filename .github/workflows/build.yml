@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.7-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.8-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,14 +130,12 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.6.7 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.6.8 (build #${{ github.run_number }})
 
-            本次更新（v1.6.7）
-            • 修复点「备份助记词 / 导出私钥」闪退：部分较旧安卓（9/10）在弹出指纹/密码验证时会崩溃。现已按系统版本正确处理，并加了保护，验证环节再也不会让 App 闪退。
-            • (v1.6.6) 修复转账偶发报错「Unable to find transactionId…」：交易已生成并提交，只是本地账本读取有一瞬间延迟；现在自动重试，转账照常完成，钱不会被扣或卡住。
-            • (v1.6.6) 修复「新建钱包把原钱包改名并从头重新同步」：私钥导入的钱包之前没被登记成「钱包1」，要点第二次才出现新钱包；现已第一次点击即正确新建，原钱包不受影响。
-            • (v1.6.6) 同步提速、日志瘦身：去掉每周期都会失败的 GetAddressUtxos 请求（纯 Sapling 网络无透明 UTXO）。
-            • (v1.6.5) 「我的 → 诊断 → 导出 / 分享日志」：一键把日志发给开发者排查。
+            本次更新（v1.6.8）
+            • 修复点「备份助记词 / 导出私钥」闪退（接续 v1.6.7）：旧安卓（9/10）弹指纹/密码验证时会崩溃，现已按系统版本正确处理并加保护，验证环节不再让 App 闪退。请确认你装的是本版本：打开「我的」，底部应显示 v1.6.8。
+            • 新增「崩溃自动记录」：万一仍闪退，崩溃详情会写进日志；重新打开 App 后到「我的 → 诊断 → 导出 / 分享日志」一键发给开发者，即可精确定位问题（不需要电脑）。
+            • (v1.6.6) 转账偶发「Unable to find transactionId…」自动重试，钱不会被扣或卡住；私钥钱包「新建钱包」不再误改原钱包；去掉每周期失败的 GetAddressUtxos 请求，同步更顺。
 
-            安装：下载 DragonX-Wallet-v1.6.7-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
+            安装：下载 DragonX-Wallet-v1.6.8-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
           files: artifacts/*.apk
