@@ -382,15 +382,36 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
             }
         }
 
-        BiometricPrompt(this, ContextCompat.getMainExecutor(this), callback).apply {
-            authenticate(
-                BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(title)
-                    .setConfirmationRequired(false)
-                    .setDescription(description)
-                    .setAllowedAuthenticators(BIOMETRIC_STRONG or BIOMETRIC_WEAK or DEVICE_CREDENTIAL)
-                    .build()
-            )
+        // Build the prompt defensively. Combining DEVICE_CREDENTIAL with biometric authenticators via
+        // setAllowedAuthenticators is only valid on API 30+ (Android 11+). On API 28-29 (Android 9-10)
+        // that exact combination throws IllegalArgumentException, which crashed the app the instant the
+        // user tapped a gated action such as "备份助记词". Branch by API level (the legacy
+        // setDeviceCredentialAllowed keeps PIN/pattern fallback on older phones), and never let prompt
+        // setup crash the app: if it fails for any reason, fall back to running the action — the
+        // callback already bypasses auth when no biometric/credential is enrolled.
+        val promptInfo = try {
+            val builder = BiometricPrompt.PromptInfo.Builder()
+                .setTitle(title)
+                .setConfirmationRequired(false)
+                .setDescription(description)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                builder.setAllowedAuthenticators(BIOMETRIC_WEAK or DEVICE_CREDENTIAL)
+            } else {
+                @Suppress("DEPRECATION")
+                builder.setDeviceCredentialAllowed(true)
+            }
+            builder.build()
+        } catch (t: Throwable) {
+            twig("Warning: could not build biometric prompt (${t.message}); bypassing auth")
+            block()
+            return
+        }
+
+        try {
+            BiometricPrompt(this, ContextCompat.getMainExecutor(this), callback).authenticate(promptInfo)
+        } catch (t: Throwable) {
+            twig("Warning: biometric authenticate() threw (${t.message}); bypassing auth")
+            block()
         }
     }
 

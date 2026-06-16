@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.6-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.7-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,14 +130,14 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.6.6 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.6.7 (build #${{ github.run_number }})
 
-            本次更新（v1.6.6）
-            • 修复转账偶发报错「Unable to find transactionId…」：交易其实已生成并提交到数据库，只是本地账本读取有一瞬间延迟（同步繁忙时更易触发）。现在会自动重试读取，转账照常完成；你的钱不会因此被扣或卡住。
-            • 修复「新建钱包把原钱包改名并从头重新同步」：用私钥导入的钱包之前没被登记成「钱包1」，第一次点新建会误改原钱包、换库重扫，要点第二次才出现新钱包。现已修复，第一次点击即正确新建，原钱包不受影响。
-            • 同步提速、日志瘦身：去掉每个同步周期都会失败的 GetAddressUtxos 请求（本网络是纯 Sapling，无透明地址 UTXO），不再反复重试、刷屏日志，账单加载与同步更顺。
-            • (v1.6.5) 「我的 → 诊断 → 导出 / 分享日志」：一键把日志发给开发者排查，不需要电脑。
-            • (v1.6.3/1.6.4) 漏记转出自动补回；零钱太碎转不出时正确引导「合并零钱」。
+            本次更新（v1.6.7）
+            • 修复点「备份助记词 / 导出私钥」闪退：部分较旧安卓（9/10）在弹出指纹/密码验证时会崩溃。现已按系统版本正确处理，并加了保护，验证环节再也不会让 App 闪退。
+            • (v1.6.6) 修复转账偶发报错「Unable to find transactionId…」：交易已生成并提交，只是本地账本读取有一瞬间延迟；现在自动重试，转账照常完成，钱不会被扣或卡住。
+            • (v1.6.6) 修复「新建钱包把原钱包改名并从头重新同步」：私钥导入的钱包之前没被登记成「钱包1」，要点第二次才出现新钱包；现已第一次点击即正确新建，原钱包不受影响。
+            • (v1.6.6) 同步提速、日志瘦身：去掉每周期都会失败的 GetAddressUtxos 请求（纯 Sapling 网络无透明 UTXO）。
+            • (v1.6.5) 「我的 → 诊断 → 导出 / 分享日志」：一键把日志发给开发者排查。
 
-            安装：下载 DragonX-Wallet-v1.6.6-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
+            安装：下载 DragonX-Wallet-v1.6.7-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
           files: artifacts/*.apk
