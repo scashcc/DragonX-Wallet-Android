@@ -60,6 +60,7 @@ fun ProfileScreen(
     onCheckUpdate: () -> Unit,
     onOpenReleasePage: () -> Unit,
     onDownloadApk: () -> Unit,
+    onExportLog: () -> Unit,
 ) {
     GradientBackground {
         Column(
@@ -110,6 +111,17 @@ fun ProfileScreen(
                         "小米/华为等需在系统里给本应用开「自启动」并关闭「省电策略」。",
                     checked = backgroundSyncEnabled,
                     onChange = onToggleBackgroundSync,
+                )
+            }
+
+            Spacer(Modifier.height(18.dp))
+            GroupTitle("诊断 Diagnostics")
+            SettingsCard {
+                SettingsRow(
+                    Icons.Filled.ExitToApp,
+                    "导出 / 分享日志",
+                    "转账或同步出问题时，把日志发给开发者帮你排查",
+                    onExportLog,
                 )
             }
 

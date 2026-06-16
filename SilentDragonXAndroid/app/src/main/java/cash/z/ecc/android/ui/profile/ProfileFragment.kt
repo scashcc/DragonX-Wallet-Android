@@ -93,6 +93,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                     onCheckUpdate = { runUpdateCheck() },
                     onOpenReleasePage = { openUrl(updatePageUrl) },
                     onDownloadApk = { openUrl(updateDownloadUrl ?: updatePageUrl) },
+                    onExportLog = { exportLog() },
                 )
             }
         }
@@ -122,6 +123,40 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
             updatePageUrl = result.pageUrl
             latestVersionState.value = result.latestVersion
             hasUpdateState.value = result.hasUpdate
+        }
+    }
+
+    /**
+     * Share the sync diary (dragonx-sync.log) via the system share sheet, so a non-technical user
+     * can send it to the developer without needing `adb`. The file lives at the root of the app's
+     * external files dir (matching where ZcashWalletApp plants the FileTwig); it is exposed to other
+     * apps through the existing FileProvider (see res/xml/file_paths.xml) with a temporary read grant.
+     */
+    private fun exportLog() {
+        runCatching {
+            val ctx = requireContext()
+            val dir = ctx.getExternalFilesDir(null) ?: ctx.filesDir
+            val log = java.io.File(dir, "dragonx-sync.log")
+            if (!log.exists() || log.length() == 0L) {
+                mainActivity?.showSnackbar("暂无日志。请先复现一次问题（例如再点一次转账），再回来导出。")
+                return@runCatching
+            }
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                ctx,
+                "${ctx.packageName}.fileprovider",
+                log
+            )
+            val share = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "DragonX 钱包同步日志")
+                putExtra(Intent.EXTRA_TEXT, "DragonX 钱包同步/转账日志（发给开发者排查用）")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(share, "分享日志给开发者"))
+        }.onFailure {
+            twig("exportLog failed: ${it.stackTraceToString()}")
+            mainActivity?.showSnackbar("导出日志失败：${it.message ?: it.toString()}")
         }
     }
 

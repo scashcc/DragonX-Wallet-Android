@@ -2,4 +2,10 @@
 <paths>
     <!-- Share files from a dedicated folder on the internal files storage. -->
     <files-path name="logs" path="logs/"/>
+    <!-- The sync diary (dragonx-sync.log) lives at the root of the app's external files dir
+         (getExternalFilesDir(null)); expose it so the user can share it from "我的 → 导出日志".
+         The files-path "." entry covers the internal-storage fallback used when there is no
+         external storage. -->
+    <external-files-path name="ext_root" path="."/>
+    <files-path name="int_root" path="."/>
 </paths>
