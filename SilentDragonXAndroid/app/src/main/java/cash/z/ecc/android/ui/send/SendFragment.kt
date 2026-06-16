@@ -133,8 +133,23 @@ class SendFragment : Fragment() {
             // internal crash like "Parameter specified as non-null is null ... <this>" can be
             // pinpointed to an exact line from a user's report.
             twig("send failed: ${t.stackTraceToString()}")
-            phase.value = SendPhase.Failed(describeError(t))
+            // A fragmented wallet's spend fails as "insufficient" (the 6-note-per-tx cap). That can
+            // surface as a THROWN exception here (not only as a failed tx), so check the whole cause
+            // chain and steer to consolidation instead of showing a generic internal error.
+            phase.value = if (isInsufficient(t)) SendPhase.NeedConsolidate else SendPhase.Failed(describeError(t))
         }
+    }
+
+    /** True when this throwable or any cause indicates the spend couldn't gather enough notes. */
+    private fun isInsufficient(t: Throwable?): Boolean {
+        var cur = t
+        var depth = 0
+        while (cur != null && depth < 8) {
+            if (cur.message?.contains("insufficient", ignoreCase = true) == true) return true
+            cur = cur.cause
+            depth++
+        }
+        return false
     }
 
     private fun friendlyError(message: String?): String {

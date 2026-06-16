@@ -65,6 +65,11 @@ class SendViewModel : ViewModel() {
         // reporting call so a hiccup in the feedback subsystem can't abort the spend.
         runCatching { funnel(SendSelected) }
         val memoToSend = createMemoToSend()
+        // Guard the amount explicitly. A bare `zatoshiAmount!!` throws an opaque NPE that the UI then
+        // shows as a scary "internal error", hiding the real (recoverable) situation. Fail with a
+        // clear, actionable message instead.
+        val amount = zatoshiAmount
+            ?: throw IllegalStateException("转账金额为空，请返回上一步重新输入金额后再发送。")
         // Use the active wallet's spending key: derived from the seed for normal wallets, or the
         // stored private key for private-key-restored wallets (identical result for seed wallets).
         val spendingKey = runBlocking {
@@ -74,13 +79,16 @@ class SendViewModel : ViewModel() {
         runCatching { reportUserInputIssues(memoToSend) }
         return synchronizer.sendToAddress(
             spendingKey,
-            zatoshiAmount!!,
+            amount,
             toAddress,
             memoToSend.chunked(ZcashSdk.MAX_MEMO_SIZE).firstOrNull() ?: ""
         ).onEach {
             twig("Received pending txUpdate: ${it?.toString()}")
-            updateMetrics(it)
-            reportFailures(it)
+            // Reporting must NEVER break the transaction stream. If analytics throws, the exception
+            // propagates to the collector and gets shown as a generic "internal error", masking the
+            // real send outcome (e.g. "insufficient -> go consolidate"). Swallow any reporting hiccup.
+            runCatching { updateMetrics(it) }
+            runCatching { reportFailures(it) }
         }
     }
 

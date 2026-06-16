@@ -72,11 +72,12 @@ private fun SendNeedConsolidate(onGoConsolidate: () -> Unit, onBack: () -> Unit)
         ) {
             Text("⚠️", fontSize = 40.sp)
             Spacer(Modifier.height(14.dp))
-            Text("需要先合并零钱", color = TextPrimary, fontSize = 20.sp)
+            Text("余额够，但需要先合并零钱", color = TextPrimary, fontSize = 20.sp)
             Spacer(Modifier.height(12.dp))
             Text(
-                "这笔转账需要用到太多的碎零钱（超过 6 个 note）。直接发送很容易卡在网络里发不出去、" +
-                    "甚至导致钱包之后一直发不了。\n\n请先「合并零钱」把碎零钱并成大额，再来转账。",
+                "你的余额其实是够的，但它分散在很多笔小额零钱里。为防止交易卡在网络里发不出去，" +
+                    "单笔转账最多只用 6 笔零钱，所以这一笔金额发不出去——这不是余额不足，你的钱没有动。\n\n" +
+                    "请先「合并零钱」把碎零钱并成几笔大额，再回来转账即可。",
                 color = TextSecondary, fontSize = 14.sp,
             )
             Spacer(Modifier.height(28.dp))
