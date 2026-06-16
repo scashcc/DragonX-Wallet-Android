@@ -102,7 +102,16 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
         lifecycleScope.launch {
             feedback.start()
         }
-        super.onCreate(savedInstanceState)
+        // Do NOT restore saved fragment / Compose view state across process death or activity
+        // recreation. On this Compose version (1.3.x), restoring a saved composition during
+        // Fragment.restoreViewState crashes deep inside the Compose runtime with
+        // "ArrayIndexOutOfBoundsException ... SlotTableKt.key" — and because Android re-saves and
+        // re-restores that same poisoned state, it becomes a CRASH LOOP on every relaunch (seen as
+        // the app restarting every ~15s right after tapping "备份助记词"). Passing null makes the
+        // FragmentManager start fresh at the home destination (the app re-syncs on launch anyway),
+        // which fully sidesteps the buggy restore path. Any in-progress navigation state is
+        // intentionally dropped — harmless for this wallet.
+        super.onCreate(null)
 
         initNavigation()
         initLoadScreen()
