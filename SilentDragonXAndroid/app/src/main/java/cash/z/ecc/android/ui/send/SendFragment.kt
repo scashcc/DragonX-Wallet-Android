@@ -154,12 +154,30 @@ class SendFragment : Fragment() {
 
     private fun friendlyError(message: String?): String {
         val m = message ?: "发送失败"
-        return if (m.contains("insufficient", ignoreCase = true)) {
-            "可用余额不足，或零钱太碎导致选不出足够的币——请先到「合并零钱」整理后再转账。"
-        } else {
-            m
+        return when {
+            m.contains("insufficient", ignoreCase = true) ->
+                "可用余额不足，或零钱太碎导致选不出足够的币——请先到「合并零钱」整理后再转账。"
+            isTransactionVisibilityRace(m) -> transactionVisibilityRaceMessage()
+            else -> m
         }
     }
+
+    /**
+     * The SDK's "Unable to find transactionId N in the repository" — the spend WAS created and
+     * committed, but the local database read couldn't see it yet (a timing issue, more likely right
+     * after a heavy sync). The money did NOT move (nothing was broadcast). v1.6.6 retries this
+     * automatically; this stays as a clear fallback in case it still surfaces.
+     */
+    private fun isTransactionVisibilityRace(message: String?): Boolean {
+        val m = message ?: return false
+        return m.contains("find transactionId", ignoreCase = true) ||
+            m.contains("row ID that does not actually exist", ignoreCase = true) ||
+            m.contains("does not have any raw data", ignoreCase = true)
+    }
+
+    private fun transactionVisibilityRaceMessage(): String =
+        "发送暂时没成功：交易已生成但本地账本还没读到它（你的钱没有动，也没有真正发出去）。\n" +
+            "请等几秒，或关掉 App 重新打开后再点一次「发送」即可。"
 
     /**
      * Turn an exception into a message a normal user can act on. Crucially, a Kotlin internal
@@ -172,6 +190,7 @@ class SendFragment : Fragment() {
         return when {
             m.contains("insufficient", ignoreCase = true) ->
                 "可用余额不足，或零钱太碎导致选不出足够的币——请先到「合并零钱」整理后再转账。"
+            isTransactionVisibilityRace(m) -> transactionVisibilityRaceMessage()
             t is NullPointerException || m.contains("non-null is null", ignoreCase = true) ||
                 m.contains("checkNotNull", ignoreCase = true) || m.contains("Intrinsics", ignoreCase = true) ->
                 "发送失败：程序内部出错（不是余额问题，你的钱没有动）。\n" +

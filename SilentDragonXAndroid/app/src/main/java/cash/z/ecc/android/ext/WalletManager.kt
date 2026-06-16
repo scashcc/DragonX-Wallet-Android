@@ -43,7 +43,18 @@ object WalletManager {
     /** Register the existing single wallet as slot 0 (default alias) if not yet registered. */
     fun migrateIfNeeded() {
         if (count() > 0) return
-        if (!box.getBoolean(Const.Backup.HAS_SEED)) return
+        // Register the pre-existing single wallet as slot 0. A wallet may be seed-based OR
+        // private-key-based (imported via spending key, which is common for mining payout
+        // addresses). The old guard only accepted HAS_SEED, so a private-key wallet was NEVER
+        // registered: count() stayed 0, and the very next createWallet() ran with i=0, which
+        // OVERWROTE slot 0's label (looked like the original wallet got "renamed"), flipped the
+        // active alias to "wallet_0" (a fresh empty db -> full resync from scratch), and made
+        // switchTo(0) early-return so the real new wallet only appeared on the SECOND tap. Accept
+        // any completed wallet (seed, spending key, or at least a stored viewing key).
+        val hasWallet = box.getBoolean(Const.Backup.HAS_SEED) ||
+            box.getCharsUtf8(Const.Backup.SPENDING_KEY) != null ||
+            box.getCharsUtf8(Const.Backup.VIEWING_KEY) != null
+        if (!hasWallet) return
         saveActiveInto(0, label = "钱包 1 Wallet 1", alias = ZcashSdk.DEFAULT_ALIAS)
         box[Const.Pref.WALLET_COUNT] = 1
         box[Const.Pref.WALLET_ACTIVE] = 0
@@ -120,6 +131,11 @@ object WalletManager {
      * it. Returns its index. The previous wallet's keys remain safe in its own slot.
      */
     suspend fun createWallet(label: String): Int {
+        // Make sure the pre-existing wallet occupies slot 0 BEFORE we pick the new index. Without
+        // this, an unregistered original (count()==0) would make i=0 and clobber it (see
+        // migrateIfNeeded). restoreFromSeed/restoreFromSpendingKey already do this; createWallet
+        // must too.
+        migrateIfNeeded()
         val network = ZcashWalletApp.instance.defaultNetwork
         val i = count()
         val mnemonics = DependenciesHolder.mnemonics

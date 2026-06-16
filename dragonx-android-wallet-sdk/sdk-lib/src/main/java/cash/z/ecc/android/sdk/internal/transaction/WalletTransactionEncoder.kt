@@ -9,6 +9,7 @@ import cash.z.ecc.android.sdk.internal.twigTask
 import cash.z.ecc.android.sdk.jni.RustBackend
 import cash.z.ecc.android.sdk.jni.RustBackendWelding
 import cash.z.ecc.android.sdk.model.Zatoshi
+import kotlinx.coroutines.delay
 
 /**
  * Class responsible for encoding a transaction in a consistent way. This bridges the gap by
@@ -45,7 +46,7 @@ internal class WalletTransactionEncoder(
         fromAccountIndex: Int
     ): EncodedTransaction {
         val transactionId = createSpend(spendingKey, amount, toAddress, memo)
-        return repository.findEncodedTransactionById(transactionId)
+        return awaitEncodedTransaction(transactionId)
             ?: throw TransactionEncoderException.TransactionNotFoundException(transactionId)
     }
 
@@ -55,7 +56,7 @@ internal class WalletTransactionEncoder(
         memo: ByteArray?
     ): EncodedTransaction {
         val transactionId = createShieldingSpend(spendingKey, transparentSecretKey, memo)
-        return repository.findEncodedTransactionById(transactionId)
+        return awaitEncodedTransaction(transactionId)
             ?: throw TransactionEncoderException.TransactionNotFoundException(transactionId)
     }
 
@@ -74,8 +75,34 @@ internal class WalletTransactionEncoder(
             // instead of falsely reporting "nothing to consolidate".
             throw TransactionEncoderException.ConsolidationNeedsRescanException
         }
-        return repository.findEncodedTransactionById(transactionId)
+        return awaitEncodedTransaction(transactionId)
             ?: throw TransactionEncoderException.TransactionNotFoundException(transactionId)
+    }
+
+    /**
+     * Look up the just-created transaction by its row id, retrying briefly if it is not yet visible.
+     *
+     * The Rust backend writes the transaction (raw bytes included) and COMMITs it on its OWN sqlite
+     * connection before returning [transactionId]; a positive id therefore means the row exists and
+     * was committed (the backend returns -1 on any failure). However, this read goes through Room's
+     * SEPARATE connection, which can momentarily not yet see that freshly-committed row (a classic
+     * cross-connection read-after-write race, more likely while a heavy scan is hammering the db).
+     * Previously that race surfaced as the scary "Unable to find transactionId N in the repository"
+     * failure even though the spend was fine — and worse, the input notes had already been marked
+     * spent locally by store_sent_tx, so the balance looked stuck. A short bounded retry lets Room
+     * catch up so the send proceeds (or, if the row truly never materializes, we still throw below
+     * and never broadcast, leaving funds untouched).
+     */
+    private suspend fun awaitEncodedTransaction(transactionId: Long): EncodedTransaction? {
+        // ~0.1 + 0.2 + 0.4 + 0.8 + 1.6 = 3.1s worst case; trivial next to the ~10s proof time.
+        var delayMs = 100L
+        repeat(6) { attempt ->
+            repository.findEncodedTransactionById(transactionId)?.let { return it }
+            twig("encoded tx $transactionId not visible yet (attempt ${attempt + 1}); retrying in ${delayMs}ms")
+            delay(delayMs)
+            delayMs = (delayMs * 2).coerceAtMost(1600L)
+        }
+        return repository.findEncodedTransactionById(transactionId)
     }
 
     /**

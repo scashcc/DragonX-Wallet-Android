@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.5-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.6-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,13 +130,14 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.6.5 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.6.6 (build #${{ github.run_number }})
 
-            本次更新（v1.6.5）
-            • 新增「导出 / 分享日志」：到「我的 → 诊断 → 导出 / 分享日志」一键把同步/转账日志通过微信、邮件等分享给开发者排查，不再需要电脑和 adb。遇到问题时先复现一次（例如再点一次转账），再来导出即可。
-            • (v1.6.4) 修复「余额够却转不出去 / 弹『程序内部出错』」：挖矿钱包零钱太碎，单笔转账最多只用 6 笔零钱；当最大的 6 笔凑不够金额时正确提示「去合并零钱」，不再误报为内部错误；金额为空给明确提示；统计/埋点出错也绝不影响转账。
-            • (v1.6.4) 说明「余额对不上」：首页/转账显示的是「可用余额」（已满 10 确认、见证齐全、能立刻动用的部分），与总额的差额显示为「待确认 +X」。根治办法是「合并零钱」。
-            • (v1.6.3) 修复部分「转出」在交易记录里漏记：到达链顶后自动「补增强」补回（资金一直安全）。
+            本次更新（v1.6.6）
+            • 修复转账偶发报错「Unable to find transactionId…」：交易其实已生成并提交到数据库，只是本地账本读取有一瞬间延迟（同步繁忙时更易触发）。现在会自动重试读取，转账照常完成；你的钱不会因此被扣或卡住。
+            • 修复「新建钱包把原钱包改名并从头重新同步」：用私钥导入的钱包之前没被登记成「钱包1」，第一次点新建会误改原钱包、换库重扫，要点第二次才出现新钱包。现已修复，第一次点击即正确新建，原钱包不受影响。
+            • 同步提速、日志瘦身：去掉每个同步周期都会失败的 GetAddressUtxos 请求（本网络是纯 Sapling，无透明地址 UTXO），不再反复重试、刷屏日志，账单加载与同步更顺。
+            • (v1.6.5) 「我的 → 诊断 → 导出 / 分享日志」：一键把日志发给开发者排查，不需要电脑。
+            • (v1.6.3/1.6.4) 漏记转出自动补回；零钱太碎转不出时正确引导「合并零钱」。
 
-            安装：下载 DragonX-Wallet-v1.6.5-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
+            安装：下载 DragonX-Wallet-v1.6.6-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
           files: artifacts/*.apk

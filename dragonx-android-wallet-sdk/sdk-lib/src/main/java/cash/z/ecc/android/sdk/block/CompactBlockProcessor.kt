@@ -576,6 +576,13 @@ class CompactBlockProcessor internal constructor(
         }
     }
 
+    // DragonX is Sapling-only and its lightwalletd does NOT implement the GetAddressUtxos RPC:
+    // every call returned `UNIMPLEMENTED: unknown method GetAddressUtxos`. This fetch ran on EVERY
+    // scan-refresh cycle (see SdkSynchronizer.refreshUtxos()), and each cycle burned a 3x
+    // retry+backoff (~3.5s) before giving up, while flooding the sync log. Users felt that as
+    // sluggish syncing and slow transaction-history loading. There are no transparent UTXOs to
+    // fetch on this network, so the fetch is disabled (transparent balance stays 0, as expected).
+    private val transparentUtxoFetchSupported = false
     var failedUtxoFetches = 0
     internal suspend fun refreshUtxos(tAddress: String, startHeight: BlockHeight): Int? =
         withContext(IO) {
@@ -583,7 +590,7 @@ class CompactBlockProcessor internal constructor(
             // todo: cleanup the way that we prevent this from running excessively
             //       For now, try for about 3 blocks per app launch. If the service fails it is
             //       probably disabled on ligthtwalletd, so then stop trying until the next app launch.
-            if (failedUtxoFetches < 9) { // there are 3 attempts per block
+            if (transparentUtxoFetchSupported && failedUtxoFetches < 9) { // there are 3 attempts per block
                 try {
                     retryUpTo(3) {
                         val result = downloader.lightWalletService.fetchUtxos(tAddress, startHeight)
