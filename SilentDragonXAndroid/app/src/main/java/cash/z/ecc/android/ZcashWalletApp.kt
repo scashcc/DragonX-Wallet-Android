@@ -220,8 +220,13 @@ class ZcashWalletApp : Application(), CameraXConfig.Provider {
                 prefs.edit().putLong("last_auto_recovery_ms", now).apply()
                 twig("Global handler: block DB corrupt -> erasing block data and restarting (keys kept).")
                 // erase() is a suspend fun; the uncaught handler is not a coroutine, so block on it.
-                runCatching { runBlocking { Initializer.erase(app, app.defaultNetwork) } }
-                    .onFailure { twig("Global recovery: erase failed: $it") }
+                // Erase the ACTIVE wallet's alias DB (multi-wallet uses per-slot aliases); otherwise
+                // this clears the default-alias DB and the real (corrupt) one survives -> crash loop.
+                runCatching {
+                    runBlocking {
+                        Initializer.erase(app, app.defaultNetwork, cash.z.ecc.android.ext.WalletManager.activeAlias())
+                    }
+                }.onFailure { twig("Global recovery: erase failed: $it") }
                 app.packageManager.getLaunchIntentForPackage(app.packageName)?.component?.let {
                     app.startActivity(Intent.makeRestartActivityTask(it))
                 }

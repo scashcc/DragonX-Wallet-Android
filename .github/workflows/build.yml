@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.12-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.13-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,12 +130,12 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.6.12 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.6.13 (build #${{ github.run_number }})
 
-            本次更新（v1.6.12）
-            • 「合并零钱一直不动 / 已确认0」根因查明并正确引导：经连服务器核对，节点完全正常、已同步到链顶；被拒是因为这个钱包的本地账本跟链对不上了（在重花链上已花掉的零钱，且承诺树锚点对不上）。现在合并遇到这种情况会停下并提示「需要完整重扫」，一键即可重扫修复（助记词/资金不受影响）。重扫到 100% 后即可正常合并/转账。
-            • （纠正 v1.6.11 的提示）这种情况不是「换节点」能解决的，而是「本钱包重扫」。
-            • 备份/查看密钥闪退（小米等机型）：已加「页面足迹」，崩溃日志会写明是哪个界面崩的——若仍闪退请到「我的 → 诊断 → 导出 / 分享日志」发来即可定位。
+            本次更新（v1.6.13）——两个硬骨头都修好了
+            • 修复「备份助记词闪退」（小米/MIUI/安卓13 等）：靠上版加的「页面足迹」精确定位到是备份页用的界面框架在初始化时崩溃。本版把备份页改成稳定的传统界面（不再用会崩的那套框架），与「导出私钥」同样的稳妥做法。备份助记词不再闪退。
+            • 修复「重扫一直重扫不停 / 重扫了也没用」：多钱包用户重扫时，程序清错了数据库（清的是默认钱包，而不是你当前用的那个），导致当前钱包真正有问题的数据没被清掉，于是反复重扫、合并也修不好。现在会清当前钱包自己的数据库，重扫一次到 100% 即可，合并零钱也能正常进行了。
+            • （延续 v1.6.12）合并遇到「本地账本对不上」会提示一键重扫；节点经核对完全正常、无需重启。
 
-            安装：下载 DragonX-Wallet-v1.6.12-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
+            安装：下载 DragonX-Wallet-v1.6.13-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
           files: artifacts/*.apk

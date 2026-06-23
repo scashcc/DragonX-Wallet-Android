@@ -113,7 +113,12 @@ class ProfileViewModel : ViewModel() {
         runBlocking {
             Initializer.erase(
                 ZcashWalletApp.instance,
-                ZcashWalletApp.instance.defaultNetwork
+                ZcashWalletApp.instance.defaultNetwork,
+                // Erase the ACTIVE wallet's database, not the default one. Multi-wallet wallets use a
+                // per-slot alias (e.g. "wallet_1"); without this the wipe deleted the default-alias DB
+                // and left the active wallet's (possibly drifted) data intact, so a "rescan" never
+                // actually cleared anything and could loop forever.
+                cash.z.ecc.android.ext.WalletManager.activeAlias()
             )
         }
     }

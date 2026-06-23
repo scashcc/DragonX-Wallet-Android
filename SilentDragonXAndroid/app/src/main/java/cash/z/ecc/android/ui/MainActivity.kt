@@ -826,7 +826,10 @@ class MainActivity : AppCompatActivity(R.layout.main_activity) {
                 runCatching {
                     Initializer.erase(
                         applicationContext,
-                        ZcashWalletApp.instance.defaultNetwork
+                        ZcashWalletApp.instance.defaultNetwork,
+                        // Active wallet's alias (see ProfileViewModel.wipe) — erase the right DB so
+                        // auto-recovery actually clears the corrupt/drifted data instead of looping.
+                        cash.z.ecc.android.ext.WalletManager.activeAlias()
                     )
                 }.onFailure { twig("recovery: erase failed: $it") }
             }
