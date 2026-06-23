@@ -31,6 +31,7 @@ import cash.z.ecc.android.sdk.db.entity.isSafeToDiscard
 import cash.z.ecc.android.sdk.db.entity.isSubmitSuccess
 import cash.z.ecc.android.sdk.db.entity.isSubmitted
 import cash.z.ecc.android.sdk.exception.SynchronizerException
+import cash.z.ecc.android.sdk.exception.TransactionEncoderException
 import cash.z.ecc.android.sdk.ext.ConsensusBranchId
 import cash.z.ecc.android.sdk.ext.ZcashSdk
 import cash.z.ecc.android.sdk.internal.block.CompactBlockDbStore
@@ -856,10 +857,20 @@ class SdkSynchronizer internal constructor(
 
         twig("[consolidation] finished: $confirmed confirmed, $failed failed/expired")
         refreshAllBalances()
-        // Surface a node-side rejection distinctly so the UI can tell the user it's the node (not the
-        // app or their balance) and to retry later / switch nodes — rather than silently spinning.
-        nodeRejecting?.let {
-            throw RuntimeException("DRAGONX_NODE_REJECTING: $it")
+        // Distinguish WHY the node refused the batches (the message is the node's reject string):
+        //  * "shielded-requirements-not-met" / "missing" anchor / "double spend" == the wallet's local
+        //    commitment tree / spent-note state has drifted from the chain (re-spending notes already
+        //    spent on-chain, or an anchor root the node doesn't recognise). A FULL RESCAN rebuilds both
+        //    correctly — verified against a healthy, fully-synced node's debug.log — so steer there.
+        //  * anything else == a genuine node/network problem; tell the user to retry / switch nodes.
+        nodeRejecting?.let { msg ->
+            val walletStateDrift = msg.contains("shielded-requirements-not-met", ignoreCase = true) ||
+                msg.contains("missing", ignoreCase = true) ||
+                msg.contains("double spend", ignoreCase = true)
+            if (walletStateDrift) {
+                throw TransactionEncoderException.ConsolidationNeedsRescanException
+            }
+            throw RuntimeException("DRAGONX_NODE_REJECTING: $msg")
         }
     }
 
