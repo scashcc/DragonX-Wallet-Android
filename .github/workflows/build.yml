@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.9-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.10-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,13 +130,13 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.6.9 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.6.10 (build #${{ github.run_number }})
 
-            本次更新（v1.6.9）——真正修复「备份助记词闪退 + 反复重启」
-            • 抓到了真凶：是界面框架在「恢复上次界面状态」时的一个崩溃，会让 App 一打开就闪退、然后反复自动重启（不是指纹验证的问题）。现已让 App 每次都从首页干净启动、不再恢复可能损坏的旧界面状态，从根上消除这个闪退循环。备份助记词、导出私钥恢复正常。
-            • 装好后请确认版本：打开「我的」，底部应显示 v1.6.9。若仍异常，先到「设置→应用→DragonX→强行停止」，再打开。
-            • (v1.6.7/1.6.8) 旧安卓指纹验证崩溃修复 + 崩溃自动记录（导出日志即可精确定位）。
-            • (v1.6.6) 转账偶发报错自动重试、私钥钱包新建不误改原钱包、同步提速。
+            本次更新（v1.6.10）——继续攻克「点备份/查看密钥时指纹验证闪退」
+            • 你们发来的崩溃日志精确定位到：闪退发生在界面框架（Jetpack Compose）初始化界面的瞬间，在小米/MIUI、安卓 13 等机型上，指纹验证弹窗会扰动界面生命周期触发它。本版三管齐下：① 升级界面框架到修复版（1.3.3）；② 让 App 在弹指纹验证等系统变化时不再重建界面；③ 把指纹验证改为「下一帧」再弹，避开会崩溃的时机。
+            • 装好后请确认版本：打开「我的」，底部应显示 v1.6.10。若仍闪退，请到「我的 → 诊断 → 导出 / 分享日志」把日志（含崩溃记录）发给开发者。
+            • (v1.6.9) 关闭「恢复上次界面状态」消除闪退自动重启循环。
+            • (v1.6.6–1.6.8) 转账自动重试、私钥钱包新建不误改原钱包、同步提速、崩溃自动记录。
 
-            安装：下载 DragonX-Wallet-v1.6.9-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
+            安装：下载 DragonX-Wallet-v1.6.10-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
           files: artifacts/*.apk

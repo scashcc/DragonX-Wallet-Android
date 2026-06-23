@@ -179,14 +179,25 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
 
     /** Biometric/device-credential gate, then navigate (used for backup & export keys). */
     private fun gatedNavigate(navId: Int) {
-        mainActivity?.let { main ->
+        val main = mainActivity ?: return
+        // Defer showing the biometric prompt to the next frame instead of firing it synchronously from
+        // the Compose click handler. The prompt adds its own fragment and flushes a fragment
+        // transaction; doing that while we're still inside Compose's input/compose pass has been
+        // observed to re-enter the Compose runtime at a bad time and crash in composeInitial
+        // (ArrayIndexOutOfBoundsException in SlotTable) on some devices. Posting lets the current frame
+        // and any pending fragment ops settle first.
+        view?.post {
+            if (!isAdded) return@post
             main.authenticate(
                 getString(R.string.biometric_backup_phrase_description),
                 getString(R.string.biometric_backup_phrase_title)
             ) {
                 main.safeNavigate(navId)
             }
-        }
+        } ?: main.authenticate(
+            getString(R.string.biometric_backup_phrase_description),
+            getString(R.string.biometric_backup_phrase_title)
+        ) { main.safeNavigate(navId) }
     }
 
     //
