@@ -136,12 +136,23 @@ object ConsolidationController {
         }
     }
 
-    /** Detects the SDK's "funds exist but witnesses are missing -> needs a full rescan" signal. */
+    /** Detects signals that mean the local DB must be rebuilt (full rescan), so the UI can offer it. */
     private fun isNeedsRescan(t: Throwable): Boolean {
         var cause: Throwable? = t
         while (cause != null) {
             if (cause is TransactionEncoderException.ConsolidationNeedsRescanException) return true
-            if (cause.message?.contains("DRAGONX_NEEDS_RESCAN") == true) return true
+            val m = cause.message
+            if (m != null && (
+                    m.contains("DRAGONX_NEEDS_RESCAN") ||
+                        // RustLayerException.BalanceException: getBalance over JNI failed -> the data DB
+                        // is corrupted / blocks missing or scanned out of order. A full rescan rebuilds
+                        // it. (On v1.6.13+ that rescan finally erases the ACTIVE wallet's DB.)
+                        m.contains("corrupted", ignoreCase = true) ||
+                        m.contains("scanned out of order", ignoreCase = true)
+                    )
+            ) {
+                return true
+            }
             cause = cause.cause
         }
         return false
