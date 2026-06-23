@@ -10,6 +10,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.viewbinding.ViewBinding
 import cash.z.ecc.android.feedback.Report
 import cash.z.ecc.android.ui.MainActivity
+import cash.z.ecc.android.util.UiBreadcrumb
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,6 +38,14 @@ abstract class BaseFragment<T : ViewBinding> : Fragment() {
 
     open val screen: Report.Screen? = null
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Crash breadcrumb: the Compose "SlotTable" crash strikes during a fragment's initial
+        // composition (in performActivityCreated, right after onCreate) and never names the screen.
+        // Stamping it here lets the crash log pinpoint which screen blew up. See [UiBreadcrumb].
+        UiBreadcrumb.note("${this::class.java.simpleName}.onCreate")
+        super.onCreate(savedInstanceState)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -47,6 +56,7 @@ abstract class BaseFragment<T : ViewBinding> : Fragment() {
     }
 
     override fun onResume() {
+        UiBreadcrumb.note("${this::class.java.simpleName}.onResume")
         super.onResume()
         mainActivity?.reportScreen(screen)
         resumedScope = lifecycleScope.coroutineContext.let {

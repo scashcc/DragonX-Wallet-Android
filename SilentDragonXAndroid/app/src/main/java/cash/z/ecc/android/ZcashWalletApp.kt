@@ -135,15 +135,18 @@ class ZcashWalletApp : Application(), CameraXConfig.Provider {
             // runCatching so diagnostic logging can never itself disturb crash handling. The marker
             // line makes it trivial to find at the tail of the log.
             runCatching {
+                val crumb = cash.z.ecc.android.util.UiBreadcrumb.trail()
                 twig("===== FATAL UNCAUGHT EXCEPTION on thread '${t?.name}' (${e?.javaClass?.name}) =====")
+                twig("UI breadcrumb: $crumb")
                 twig("Uncaught Exception:\n${e?.stackTraceToString() ?: "$e"}")
                 // Also persist to a dedicated, never-flooded crash file. The sync log keeps growing
                 // (and rotates at 2MB) once the user reopens the app, which can bury/evict the crash;
-                // this file keeps the last crash intact for the export feature to attach.
+                // this file keeps the last crash intact for the export feature to attach. The UI
+                // breadcrumb names the screen that crashed (Compose SlotTable crashes don't).
                 val crashFile = java.io.File(getExternalFilesDir(null) ?: filesDir, "dragonx-crash.log")
                 val stamp = java.text.SimpleDateFormat("MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date())
                 crashFile.appendText(
-                    "===== CRASH $stamp  v${BuildConfig.VERSION_NAME}  thread='${t?.name}' =====\n" +
+                    "===== CRASH $stamp  v${BuildConfig.VERSION_NAME}  thread='${t?.name}'  screen=[$crumb] =====\n" +
                         "${e?.stackTraceToString() ?: e}\n\n"
                 )
             }

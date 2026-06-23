@@ -755,6 +755,14 @@ class SdkSynchronizer internal constructor(
         var confirmed = 0
         var failed = 0
         var idleRounds = 0
+        // If the node rejects batch after batch (e.g. a consensus error like
+        // "bad-txns-shielded-requirements-not-met" because it does not recognize our Sapling anchor /
+        // is not fully synced), keep building more is pointless: each batch costs ~30s of proving and
+        // locks its notes locally, and the UI just sits at "0 submitted / 0 confirmed" for hours. Bail
+        // out after a few consecutive submit failures and report why.
+        val maxConsecutiveSubmitFailures = 4
+        var consecutiveSubmitFailures = 0
+        var nodeRejecting: String? = null
 
         // Submit fresh batches until the in-flight queue is full or nothing is currently spendable.
         // Returns the transactions produced this call so the flow body can emit them; emit() is kept
@@ -786,8 +794,18 @@ class SdkSynchronizer internal constructor(
                 if (resultTx.isFailedSubmit() || resultTx.isCancelled()) {
                     twig("[consolidation] batch ${resultTx.id} did not enter the mempool; not tracking it")
                     failed++
+                    consecutiveSubmitFailures++
+                    if (consecutiveSubmitFailures >= maxConsecutiveSubmitFailures) {
+                        nodeRejecting = resultTx.errorMessage ?: "node rejected the transaction"
+                        twig(
+                            "[consolidation] the node is rejecting every batch ($nodeRejecting); aborting" +
+                                " after $consecutiveSubmitFailures consecutive submit failures"
+                        )
+                        break
+                    }
                 } else {
                     inflight.add(resultTx.id)
+                    consecutiveSubmitFailures = 0
                     twig("[consolidation] submitted batch ${resultTx.id}; inflight=${inflight.size}")
                 }
             }
@@ -796,6 +814,7 @@ class SdkSynchronizer internal constructor(
 
         topUp().forEach { emit(it) }
         while (true) {
+            if (nodeRejecting != null) break
             if (inflight.isEmpty()) {
                 // Nothing pending and nothing new to encode. It may just be that freshly-merged
                 // outputs have not matured into spendable notes yet, so wait a few grace cycles
@@ -837,6 +856,11 @@ class SdkSynchronizer internal constructor(
 
         twig("[consolidation] finished: $confirmed confirmed, $failed failed/expired")
         refreshAllBalances()
+        // Surface a node-side rejection distinctly so the UI can tell the user it's the node (not the
+        // app or their balance) and to retry later / switch nodes — rather than silently spinning.
+        nodeRejecting?.let {
+            throw RuntimeException("DRAGONX_NODE_REJECTING: $it")
+        }
     }
 
     override suspend fun refreshUtxos(address: String, startHeight: BlockHeight): Int? {

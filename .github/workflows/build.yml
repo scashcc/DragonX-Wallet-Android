@@ -111,7 +111,7 @@ jobs:
           find SilentDragonXAndroid/app/build/outputs/apk -name "*.apk" -print -exec cp {} artifacts/ \;
           # 通用包（任何手机都能装）改成好认的名字
           if ls artifacts/*-release-null.apk >/dev/null 2>&1; then
-            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.10-universal.apk"
+            cp artifacts/*-release-null.apk "artifacts/DragonX-Wallet-v1.6.11-universal.apk"
           fi
           echo "===== 产出的 APK ====="
           ls -lh artifacts
@@ -130,13 +130,12 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: DragonX Wallet build #${{ github.run_number }}
           body: |
-            DragonX 安卓钱包 v1.6.10 (build #${{ github.run_number }})
+            DragonX 安卓钱包 v1.6.11 (build #${{ github.run_number }})
 
-            本次更新（v1.6.10）——继续攻克「点备份/查看密钥时指纹验证闪退」
-            • 你们发来的崩溃日志精确定位到：闪退发生在界面框架（Jetpack Compose）初始化界面的瞬间，在小米/MIUI、安卓 13 等机型上，指纹验证弹窗会扰动界面生命周期触发它。本版三管齐下：① 升级界面框架到修复版（1.3.3）；② 让 App 在弹指纹验证等系统变化时不再重建界面；③ 把指纹验证改为「下一帧」再弹，避开会崩溃的时机。
-            • 装好后请确认版本：打开「我的」，底部应显示 v1.6.10。若仍闪退，请到「我的 → 诊断 → 导出 / 分享日志」把日志（含崩溃记录）发给开发者。
-            • (v1.6.9) 关闭「恢复上次界面状态」消除闪退自动重启循环。
-            • (v1.6.6–1.6.8) 转账自动重试、私钥钱包新建不误改原钱包、同步提速、崩溃自动记录。
+            本次更新（v1.6.11）
+            • 修复「合并零钱一直不动、已确认0/已提交0」：日志显示是节点把每一笔合并交易都拒绝了（节点未同步好/繁忙时的共识校验失败），App 却在后台一遍遍重试，看起来就像卡住。现在连续几次被拒就会停下并明确提示「节点暂时拒绝，钱没动，请稍后再试或换节点」，不再空转、也不会把零钱长时间锁住。你的钱一直是安全的。
+            • 备份/查看密钥闪退（小米等机型）继续排查：这是界面框架初始化时的崩溃，崩溃栈不显示是哪个页面。本版加了「页面足迹」记录，崩溃日志会写明具体是哪个界面崩的——若仍闪退，请到「我的 → 诊断 → 导出 / 分享日志」发来，即可一击修复。
+            • (v1.6.9) 关闭「恢复上次界面状态」消除闪退自动重启循环；(v1.6.6–1.6.8) 转账自动重试、私钥钱包新建不误改原钱包、崩溃自动记录。
 
-            安装：下载 DragonX-Wallet-v1.6.10-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
+            安装：下载 DragonX-Wallet-v1.6.11-universal.apk（兼容所有机型）。覆盖安装即可，助记词不受影响。
           files: artifacts/*.apk

@@ -91,12 +91,22 @@ object ConsolidationController {
                 // the next launch knows it was interrupted and can offer to resume.
                 throw c
             } catch (t: Throwable) {
-                _state.value = if (isNeedsRescan(t)) {
-                    twig("consolidation needs a full rescan: $t")
-                    ConsolidateUiState.NeedsRescan
-                } else {
-                    twig("consolidation failed: $t")
-                    ConsolidateUiState.Error(t.message ?: t.toString())
+                _state.value = when {
+                    isNeedsRescan(t) -> {
+                        twig("consolidation needs a full rescan: $t")
+                        ConsolidateUiState.NeedsRescan
+                    }
+                    isNodeRejecting(t) -> {
+                        twig("consolidation halted: node is rejecting batches: $t")
+                        ConsolidateUiState.Error(
+                            "节点暂时拒绝了合并交易（多半是节点没完全同步好或正在繁忙/重启）。\n" +
+                                "你的钱没有动，也没有被扣。请过一会儿再试；若一直这样，到「我的 → 节点」换一个节点后再合并。"
+                        )
+                    }
+                    else -> {
+                        twig("consolidation failed: $t")
+                        ConsolidateUiState.Error(t.message ?: t.toString())
+                    }
                 }
                 setInProgress(false)
             }
@@ -132,6 +142,16 @@ object ConsolidationController {
         while (cause != null) {
             if (cause is TransactionEncoderException.ConsolidationNeedsRescanException) return true
             if (cause.message?.contains("DRAGONX_NEEDS_RESCAN") == true) return true
+            cause = cause.cause
+        }
+        return false
+    }
+
+    /** Detects the SDK's "the node keeps rejecting every batch -> stopped early" signal. */
+    private fun isNodeRejecting(t: Throwable): Boolean {
+        var cause: Throwable? = t
+        while (cause != null) {
+            if (cause.message?.contains("DRAGONX_NODE_REJECTING") == true) return true
             cause = cause.cause
         }
         return false
